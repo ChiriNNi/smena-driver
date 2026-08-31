@@ -1,36 +1,112 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OVI — веб-версия (Next.js + Postgres)
 
-## Getting Started
+Полноценный веб-сервис для управления сменами водителей: общая база данных для всех
+устройств, чек-лист смены, автопарк, отчёты, экспорт в PDF/CSV/Excel. Заменяет прежнюю
+локальную версию на одном HTML-файле (`localStorage`) — теперь данные хранятся в общей
+базе Postgres и доступны с любого устройства.
 
-First, run the development server:
+## Стек
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Next.js** (App Router) — фронтенд и API-роуты в одном проекте.
+- **Postgres** (Neon / Vercel Postgres, бесплатный тариф) — единая база данных.
+- **Vercel** — бесплатный хостинг.
+- **PIN администратора** — как и раньше, но теперь проверяется на сервере (bcrypt-хэш с
+  солью, сессия в httpOnly-cookie) — это реальный барьер, а не декоративный.
+- Экспорт отчётов — **PDF** (через печать браузера, как раньше), **CSV** и **Excel (.xlsx)**.
+
+## Локальный запуск
+
+1. Установите зависимости:
+   ```bash
+   npm install
+   ```
+2. Скопируйте `.env.example` в `.env.local` и заполните:
+   - `DATABASE_URL` — строка подключения к Postgres (см. ниже, как получить бесплатную БД).
+   - `SESSION_SECRET` — случайная строка, например:
+     ```bash
+     node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+     ```
+3. Примените схему БД (один раз на новой базе):
+   ```bash
+   npm run db:migrate
+   ```
+4. Запустите dev-сервер:
+   ```bash
+   npm run dev
+   ```
+   Откройте http://localhost:3000.
+
+## Бесплатная база данных (Neon)
+
+1. Зарегистрируйтесь на https://neon.tech (есть бесплатный тариф).
+2. Создайте проект → скопируйте строку подключения (Connection string) — она выглядит как
+   `postgres://user:password@ep-xxxx.aws.neon.tech/neondb?sslmode=require`.
+3. Вставьте её в `DATABASE_URL` в `.env.local` (для локальной разработки) и в переменные
+   окружения проекта на Vercel (для продакшена — см. ниже).
+
+Vercel Postgres (тоже на базе Neon) подключается аналогично через маркетплейс интеграций
+в панели Vercel — тогда `DATABASE_URL` подставится автоматически.
+
+## Деплой на Vercel
+
+1. Залейте проект в GitHub-репозиторий.
+2. На https://vercel.com → New Project → импортируйте репозиторий.
+3. В настройках проекта (Environment Variables) добавьте `DATABASE_URL` и `SESSION_SECRET`
+   (те же значения, что в `.env.local`, либо отдельная продакшн-база).
+4. Перед первым деплоем (или сразу после) примените схему БД к продакшн-базе:
+   ```bash
+   DATABASE_URL="<строка продакшн-БД>" npm run db:migrate
+   ```
+5. Деплой запустится автоматически при пуше в основную ветку.
+
+## Структура проекта
+
+```
+app/
+├── page.tsx              — точка входа, рендерит клиентское приложение
+├── api/                  — серверные API-роуты (все операции с БД)
+│   ├── auth/             — PIN-вход/выход администратора
+│   ├── drivers/          — водители
+│   ├── draft/            — черновик текущей (незавершённой) смены
+│   ├── shifts/           — история смен + завершение смены (транзакция)
+│   ├── fleet/*/          — пробег, расходы, график, напоминания
+│   ├── reports/          — агрегированная аналитика
+│   ├── export/csv, xlsx  — выгрузка отчётов
+│   └── rules/quiz, ack   — тест на знание правил (проверяется на сервере)
+components/               — React-компоненты интерфейса
+lib/
+├── db.ts                 — подключение к Postgres
+├── schema.sql            — DDL базы данных
+├── shared-calc.ts        — общие формулы (расхождение кассы, % чек-листа и т.д.)
+├── checklist-data.ts      — содержимое чек-листа смены
+├── duties-rules-data.ts   — обязанности и правила
+├── quiz-data.server.ts    — вопросы теста и ПРАВИЛЬНЫЕ ОТВЕТЫ (только сервер!)
+└── reports.ts             — агрегация данных для отчётов/экспорта
+scripts/migrate.mjs       — применение schema.sql к базе данных
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Что изменилось по сравнению со старой версией
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Общая база вместо localStorage** — все водители и администратор видят одни и те же
+  данные с любого устройства.
+- **Связи по стабильному id водителя**, а не по имени — раньше при несовпадении имени
+  пробег/расходы могли уйти не тому водителю.
+- **Идемпотентное завершение смены** — повторный клик/двойная отправка не создаёт
+  дубликат записи в истории.
+- **PIN проверяется на сервере** (bcrypt + соль, httpOnly-сессия) — раньше проверка была
+  полностью на клиенте и обходилась через консоль браузера.
+- **Тест на знание правил проверяется на сервере** — раньше результат хранился в
+  незащищённой переменной браузера и мог быть подделан.
+- **Формулы (расхождение кассы, % выполнения чек-листа) вынесены в общие функции**
+  (`lib/shared-calc.ts`) — раньше были продублированы по 4–6 раз.
+- Экспорт отчётов дополнен **Excel (.xlsx)** — рядом с уже привычными PDF и CSV.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Известные ограничения / что можно добавить дальше
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Фото (заметки чек-листа, чеки расходов) хранятся как base64 прямо в базе данных —
+  для очень большого объёма фото за долгий срок стоит вынести их в отдельное файловое
+  хранилище (например, Vercel Blob).
+- Редактирование состава позиций укомплектовки (было в старой версии) в веб-версии пока
+  не перенесено — список фиксирован в `lib/checklist-data.ts`.
+- Push-уведомления о сроках ТО/документов не реализованы (сейчас — только визуальный
+  индикатор в разделе «Напоминания» и в отчётах).
