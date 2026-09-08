@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import { queryOne, query } from './db';
 
-export const SESSION_COOKIE = 'ovi_admin_session';
+export const SESSION_COOKIE = 'smena_admin_session';
 // Сессия администратора живёт до конца дня работы — при перезагрузке страницы
 // (в пределах TTL) PIN спрашивать заново не нужно, но не бессрочно.
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 часов

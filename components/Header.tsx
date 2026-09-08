@@ -10,7 +10,7 @@ export default function Header({ isAdmin, progress, onLockClick }: Props) {
   return (
     <header className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-3 border-b border-neutral-800 bg-neutral-900 px-4 py-3 sm:px-6">
       <div className="flex items-center gap-3">
-        <span className="text-lg font-bold tracking-[0.2em] text-amber-400">OVI</span>
+        <span className="text-lg font-bold tracking-[0.2em] text-amber-400">SMENA</span>
         <span className="hidden text-xs text-neutral-500 sm:inline">Смена водителя</span>
       </div>
       <div className="flex items-center gap-3">

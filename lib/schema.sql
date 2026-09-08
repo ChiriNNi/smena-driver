@@ -1,4 +1,4 @@
--- Схема базы данных OVI. Выполнить один раз на новой базе (Neon / Vercel Postgres).
+-- Схема базы данных Smena. Выполнить один раз на новой базе (Supabase Postgres).
 -- Повторный запуск безопасен (IF NOT EXISTS везде, где возможно).
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

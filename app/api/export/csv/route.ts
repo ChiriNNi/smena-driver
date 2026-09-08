@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const lines: string[] = [];
   const row = (...cols: unknown[]) => lines.push(cols.map(csvEscape).join(';'));
 
-  row('Отчёт OVI', `Период: ${data.from || 'начало'} — ${data.to || 'сегодня'}`);
+  row('Отчёт Smena', `Период: ${data.from || 'начало'} — ${data.to || 'сегодня'}`);
   row('');
   row('Сводка');
   row('Смен', data.kpi.shifts);

@@ -15,12 +15,12 @@ export async function GET(req: NextRequest) {
   const data = await getReportData(period, q.get('from'), q.get('to'));
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'OVI';
+  wb.creator = 'Smena';
   wb.created = new Date();
 
   const summary = wb.addWorksheet('Сводка');
   summary.columns = [{ width: 28 }, { width: 20 }];
-  summary.addRow(['Отчёт OVI', `Период: ${data.from || 'начало'} — ${data.to || 'сегодня'}`]).font = { bold: true };
+  summary.addRow(['Отчёт Smena', `Период: ${data.from || 'начало'} — ${data.to || 'сегодня'}`]).font = { bold: true };
   summary.addRow([]);
   summary.addRow(['Смен', data.kpi.shifts]);
   summary.addRow(['Километры', data.kpi.km]);
