@@ -8,7 +8,9 @@ export type IconName =
   | 'sunrise' | 'zap' | 'moon' // фазы смены
   | 'shirt' | 'box' | 'car' | 'map' | 'wallet' | 'check-circle' | 'pin' // секции чек-листа
   | 'check' | 'warning' | 'camera' | 'plus' | 'x' | 'chevron-up' | 'chevron-down' | 'backspace'
-  | 'clipboard' | 'clock' | 'user' | 'id-card'; // навигация
+  | 'clipboard' | 'clock' | 'user' | 'id-card' // навигация
+  | 'chart' | 'settings' | 'download' | 'calendar' | 'pencil' | 'trash' | 'key' | 'power'
+  | 'shield' | 'fuel' | 'wrench' | 'bell' | 'users' | 'arrow-right'; // админка
 
 const PATHS: Record<IconName, React.ReactNode> = {
   sunrise: (
@@ -113,6 +115,86 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M13.5 9.5h4M13.5 13h4" />
     </>
   ),
+  chart: <path d="M4 20V11M12 20V4M20 20v-7" />,
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v2.5M12 18.5V21M4.2 7.5l2.2 1.3M17.6 15.2l2.2 1.3M4.2 16.5l2.2-1.3M17.6 8.8l2.2-1.3" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 4v11" />
+      <path d="M8 11.5 12 15.5l4-4" />
+      <path d="M4 19h16" />
+    </>
+  ),
+  calendar: (
+    <>
+      <rect x="3.5" y="5.5" width="17" height="15" rx="2" />
+      <path d="M3.5 10h17M8 3.5v4M16 3.5v4" />
+    </>
+  ),
+  pencil: (
+    <>
+      <path d="M16.5 4.5l3 3L8 19H5v-3z" />
+      <path d="M14.5 6.5l3 3" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M4 7h16" />
+      <path d="M9.5 7V4.5h5V7" />
+      <path d="M6 7l1 13h10l1-13" />
+      <path d="M10.5 11v5.5M13.5 11v5.5" />
+    </>
+  ),
+  key: (
+    <>
+      <circle cx="8" cy="12" r="3.5" />
+      <path d="M11.5 12H21M17.5 12v3.5M20 12v2.5" />
+    </>
+  ),
+  power: (
+    <>
+      <path d="M12 3.5v7" />
+      <path d="M7 6.6a7.5 7.5 0 1010 0" />
+    </>
+  ),
+  shield: (
+    <>
+      <path d="M12 3.5l7 2.5v5.5c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6z" />
+      <path d="M9 12.2l2 2 4-4" />
+    </>
+  ),
+  fuel: (
+    <>
+      <path d="M5 20V5.5A1.5 1.5 0 016.5 4h5A1.5 1.5 0 0113 5.5V20" />
+      <path d="M3.5 20h11" />
+      <path d="M6.5 8.5h5" />
+      <path d="M13 10h3.5a2 2 0 012 2v4a1.5 1.5 0 003 0v-6l-2.5-3" />
+    </>
+  ),
+  wrench: (
+    <>
+      <path d="M14.5 6a3.8 3.8 0 105 5l-9 9-4.5 1 1-4.5z" />
+      <path d="M14.8 11.2 12 8.4" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M6.5 10a5.5 5.5 0 0111 0c0 4 1.5 5.5 1.5 5.5H5S6.5 14 6.5 10z" />
+      <path d="M10 19a2.2 2.2 0 004 0" />
+    </>
+  ),
+  users: (
+    <>
+      <circle cx="9" cy="8.5" r="3" />
+      <path d="M3.5 19.5a5.5 5.5 0 0111 0" />
+      <path d="M16 6.2a3 3 0 010 5.6M17.5 19.5a5.6 5.6 0 00-2-4" />
+    </>
+  ),
+  'arrow-right': <path d="M5 12h13M13 6.5l5.5 5.5-5.5 5.5" />,
 };
 
 export function Icon({ name, className, size = 20 }: { name: IconName; className?: string; size?: number }) {

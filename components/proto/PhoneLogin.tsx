@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { formatPhoneInput, onlyDigits, SEED_DRIVERS, type ProtoDriver } from '@/lib/proto-data';
+import { formatPhoneInput, onlyDigits, type ProtoDriver } from '@/lib/proto-data';
+import { useStore } from './store';
 import { Icon } from './icons';
 
 type Props = { onLogin: (driver: ProtoDriver) => void };
@@ -10,6 +11,7 @@ type Step = 'phone' | 'pin';
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
 
 export default function PhoneLogin({ onLogin }: Props) {
+  const { drivers } = useStore();
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
@@ -18,7 +20,7 @@ export default function PhoneLogin({ onLogin }: Props) {
 
   const phoneDigits = onlyDigits(phone);
   const phoneReady = phoneDigits.length === 11;
-  const matchedDriver = SEED_DRIVERS.find((d) => onlyDigits(d.phone) === phoneDigits);
+  const matchedDriver = drivers.find((d) => onlyDigits(d.phone) === phoneDigits && d.active);
 
   function goToPin() {
     if (!phoneReady) return;
@@ -88,7 +90,7 @@ export default function PhoneLogin({ onLogin }: Props) {
           <div className="p-fade-up mt-10 rounded-[24px] border border-dashed border-[#e7e9e2] bg-[#f5f6f1] p-4" style={{ animationDelay: '0.05s' }}>
             <p className="p-eyebrow mb-3 text-center">Демо-вход — для обзора прототипа</p>
             <div className="flex flex-col gap-2">
-              {SEED_DRIVERS.map((d) => (
+              {drivers.filter((d) => d.active).map((d) => (
                 <button
                   key={d.id}
                   onClick={() => onLogin(d)}

@@ -1,15 +1,29 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { InputHTMLAttributes } from 'react';
 import { itemKey, type ChecklistPhase } from '@/lib/checklist-data';
-import { buildWhatsAppSummary, CARS, nowHHMM, type NoteEntry, type ProtoDriver } from '@/lib/proto-data';
+import {
+  buildWhatsAppSummary,
+  carLabel,
+  countChecklistItems,
+  initials,
+  nowHHMM,
+  todayISO,
+  uid,
+  type NoteEntry,
+  type ProtoDriver,
+  type ProtoShift,
+  type ShiftRemark,
+} from '@/lib/proto-data';
+import { useStore } from './store';
 import ChecklistPhaseView from './ChecklistPhaseView';
 import HistoryTab from './HistoryTab';
 import ProfileTab from './ProfileTab';
 import ShiftInfoCard from './ShiftInfoCard';
+import ShiftReportModal from './ShiftReportModal';
 import BottomNav from './BottomNav';
 import { Icon, phaseIconName } from './icons';
+import { Field, SelectField } from './ui';
 
 type Tab = 'checklist' | 'history' | 'profile';
 
@@ -17,42 +31,23 @@ type Tab = 'checklist' | 'history' | 'profile';
 // ширины без переноса, а слово «смены» и так понятно из контекста вкладки.
 const SHORT_PHASE_LABEL: Record<string, string> = { start: 'Начало', process: 'Процесс', end: 'Завершение' };
 
-function money(v: string) {
-  return (Number(v) || 0).toLocaleString('ru-RU') + ' ₸';
-}
+export default function DriverApp({ driver, onLogout }: { driver: ProtoDriver; onLogout: () => void }) {
+  const { checklist, cars, addShift } = useStore();
 
-function Field({ label, ...props }: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <div>
-      <label className="p-eyebrow mb-1.5 block">{label}</label>
-      <input className="p-input text-sm" {...props} />
-    </div>
-  );
-}
-
-export default function DriverApp({
-  driver,
-  checklist,
-  onLogout,
-}: {
-  driver: ProtoDriver;
-  checklist: ChecklistPhase[];
-  onLogout: () => void;
-}) {
   const [tab, setTab] = useState<Tab>('checklist');
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState<Record<string, NoteEntry>>({});
   const [openNoteKey, setOpenNoteKey] = useState<string | null>(null);
-  const [finished, setFinished] = useState(false);
+  const [finishedShift, setFinishedShift] = useState<ProtoShift | null>(null);
   const pagerRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
 
   // Данные начала/завершения смены — как в старой панели «Данные смены»,
   // только по одной карточке в соответствующей фазе вместо одной большой формы.
-  const [startDraft, setStartDraft] = useState({ place: '', time: '', car: driver.car, cashStart: '' });
+  const [startDraft, setStartDraft] = useState({ place: '', time: '', carId: driver.carId, cashStart: '', odoStart: '' });
   const [startConfirmed, setStartConfirmed] = useState(false);
-  const [endDraft, setEndDraft] = useState({ place: '', time: '', cashEnd: '', cashExpenses: '', cashFines: '' });
+  const [endDraft, setEndDraft] = useState({ place: '', time: '', cashEnd: '', cashExpenses: '', cashFines: '', odoEnd: '' });
   const [endConfirmed, setEndConfirmed] = useState(false);
 
   // Время по умолчанию проставляем только на клиенте после монтирования —
@@ -64,12 +59,33 @@ export default function DriverApp({
     setEndDraft((d) => (d.time ? d : { ...d, time: t }));
   }, []);
 
-  const totalItems = useMemo(
-    () => checklist.reduce((sum, ph) => sum + ph.sections.reduce((s, sec) => s + sec.items.length, 0), 0),
-    [checklist]
-  );
+  // Возврат на вкладку «Чек-лист» перемонтирует пейджер со scrollLeft = 0,
+  // из-за чего фаза сбрасывалась на первую. Восстанавливаем позицию сами.
+  useEffect(() => {
+    if (tab !== 'checklist' || !startConfirmed) return;
+    const el = pagerRef.current;
+    if (el) el.scrollLeft = phaseIdx * el.clientWidth;
+  }, [tab, startConfirmed, phaseIdx]);
+
+  const totalItems = useMemo(() => countChecklistItems(checklist), [checklist]);
   const doneItems = Object.values(checked).filter(Boolean).length;
   const progress = totalItems === 0 ? 0 : Math.round((doneItems / totalItems) * 100);
+
+  // Замечания к пунктам чек-листа — попадают в итоговый отчёт по смене.
+  const remarks = useMemo<ShiftRemark[]>(() => {
+    const list: ShiftRemark[] = [];
+    checklist.forEach((ph) => {
+      ph.sections.forEach((section) => {
+        section.items.forEach((item, idx) => {
+          const note = notes[itemKey(ph.id, section.id, idx)];
+          if (note && (note.comment.trim() || note.photos.length > 0)) {
+            list.push({ text: item.text, comment: note.comment.trim(), photos: note.photos.length });
+          }
+        });
+      });
+    });
+    return list;
+  }, [checklist, notes]);
 
   function toggle(key: string) {
     setChecked((c) => ({ ...c, [key]: !c[key] }));
@@ -92,36 +108,63 @@ export default function DriverApp({
 
   const shiftDate = new Date().toLocaleDateString('ru-RU');
   const summaryText = buildWhatsAppSummary(
-    driver, doneItems, totalItems, shiftDate,
+    driver,
+    cars,
+    doneItems,
+    totalItems,
+    shiftDate,
     startConfirmed ? startDraft : undefined,
     endConfirmed ? endDraft : undefined
   );
-
-  function copySummary() {
-    navigator.clipboard?.writeText(summaryText);
-  }
 
   function sendWhatsApp() {
     window.open('https://wa.me/?text=' + encodeURIComponent(summaryText), '_blank');
   }
 
-  // Собираем замечания из заметок к пунктам чек-листа для итогового отчёта.
-  const remarks = useMemo(() => {
-    const list: { text: string; comment: string; photos: number }[] = [];
-    checklist.forEach((ph) => {
-      ph.sections.forEach((section) => {
-        section.items.forEach((item, idx) => {
-          const note = notes[itemKey(ph.id, section.id, idx)];
-          if (note && (note.comment.trim() || note.photos.length > 0)) {
-            list.push({ text: item.text, comment: note.comment, photos: note.photos.length });
-          }
-        });
-      });
-    });
-    return list;
-  }, [checklist, notes]);
+  /** Завершение смены: пишем её в общий список (админ сразу видит) и открываем отчёт. */
+  function finishShift() {
+    const shift: ProtoShift = {
+      id: uid('s'),
+      driverId: driver.id,
+      carId: startDraft.carId,
+      date: todayISO(),
+      timeStart: startDraft.time,
+      timeEnd: endDraft.time,
+      placeStart: startDraft.place,
+      placeEnd: endDraft.place,
+      done: doneItems,
+      total: totalItems,
+      cashStart: Number(startDraft.cashStart) || 0,
+      cashEnd: Number(endDraft.cashEnd) || 0,
+      cashExpenses: Number(endDraft.cashExpenses) || 0,
+      cashFines: Number(endDraft.cashFines) || 0,
+      odoStart: Number(startDraft.odoStart) || 0,
+      odoEnd: Number(endDraft.odoEnd) || 0,
+      remarks,
+    };
+    setEndConfirmed(true);
+    addShift(shift);
+    setFinishedShift(shift);
+  }
 
-  const startDisabled = !startDraft.place.trim() || !startDraft.time;
+  /** После закрытия отчёта смена считается сданной — кабинет готов к новой. */
+  function resetShift() {
+    setFinishedShift(null);
+    setChecked({});
+    setNotes({});
+    setOpenNoteKey(null);
+    setStartConfirmed(false);
+    setEndConfirmed(false);
+    setPhaseIdx(0);
+    const t = nowHHMM();
+    setStartDraft({ place: '', time: t, carId: driver.carId, cashStart: '', odoStart: '' });
+    setEndDraft({ place: '', time: t, cashEnd: '', cashExpenses: '', cashFines: '', odoEnd: '' });
+    setTab('history');
+  }
+
+  const startDisabled = !startDraft.place.trim() || !startDraft.time || !startDraft.carId;
+  const endDisabled = !endDraft.place.trim() || !endDraft.time;
+  const activeCars = cars.filter((c) => c.active || c.id === startDraft.carId);
 
   const startFields = (
     <>
@@ -132,12 +175,7 @@ export default function DriverApp({
         placeholder="Офис, Алматы"
       />
       <div className="grid grid-cols-2 gap-3">
-        <Field
-          label="Время"
-          type="time"
-          value={startDraft.time}
-          onChange={(e) => setStartDraft((d) => ({ ...d, time: e.target.value }))}
-        />
+        <Field label="Время" type="time" value={startDraft.time} onChange={(e) => setStartDraft((d) => ({ ...d, time: e.target.value }))} />
         <Field
           label="Касса, ₸"
           inputMode="numeric"
@@ -146,16 +184,21 @@ export default function DriverApp({
           placeholder="0"
         />
       </div>
-      <div>
-        <label className="p-eyebrow mb-1.5 block">Автомобиль</label>
-        <select
-          className="p-input text-sm"
-          value={startDraft.car}
-          onChange={(e) => setStartDraft((d) => ({ ...d, car: e.target.value }))}
-        >
-          {CARS.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-      </div>
+      <SelectField label="Автомобиль" value={startDraft.carId} onChange={(e) => setStartDraft((d) => ({ ...d, carId: e.target.value }))}>
+        {activeCars.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.model} — {c.plate}
+          </option>
+        ))}
+      </SelectField>
+      <Field
+        label="Одометр, км"
+        inputMode="numeric"
+        value={startDraft.odoStart}
+        onChange={(e) => setStartDraft((d) => ({ ...d, odoStart: e.target.value.replace(/\D/g, '') }))}
+        placeholder="84210"
+        hint="Показание на начало смены — по нему считается пробег."
+      />
     </>
   );
 
@@ -164,18 +207,20 @@ export default function DriverApp({
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[#e7e9e2] bg-white/95 px-4 py-3 backdrop-blur">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#8fc640]/15 text-sm font-bold text-[#5e9128]">
-            {driver.firstName[0]}{driver.lastName[0]}
+            {initials(driver)}
           </div>
-          <div>
-            <div className="text-sm font-semibold">{driver.lastName} {driver.firstName}</div>
-            <div className="text-xs text-[#9a9d96]">{startConfirmed ? startDraft.car : driver.car}</div>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold">
+              {driver.lastName} {driver.firstName}
+            </div>
+            <div className="truncate text-xs text-[#9a9d96]">{carLabel(cars, startConfirmed ? startDraft.carId : driver.carId)}</div>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-[#5c6066]">
+        <div className="flex shrink-0 items-center gap-2 text-xs text-[#5c6066]">
           <div className="h-2 w-16 overflow-hidden rounded-full bg-[#f0f1ec]">
             <div className="h-full rounded-full bg-[#8fc640] transition-all duration-500" style={{ width: `${progress}%` }} />
           </div>
-          <span className="tabular-nums font-semibold text-[#1a1d1e]">{progress}%</span>
+          <span className="font-semibold tabular-nums text-[#1a1d1e]">{progress}%</span>
         </div>
       </header>
 
@@ -228,8 +273,8 @@ export default function DriverApp({
               <ShiftInfoCard
                 icon="map"
                 title="Данные начала смены"
-                confirmed={true}
-                summary={`${startDraft.time}, ${startDraft.place || 'место не указано'} · ${startDraft.car}`}
+                confirmed
+                summary={`${startDraft.time}, ${startDraft.place || 'место не указано'} · ${carLabel(cars, startDraft.carId)}`}
                 confirmLabel="Начать смену"
                 confirmDisabled={startDisabled}
                 onConfirm={() => setStartConfirmed(true)}
@@ -240,7 +285,7 @@ export default function DriverApp({
             </div>
 
             <div ref={pagerRef} onScroll={onScrollPager} className="pager flex overflow-x-auto">
-              {checklist.map((ph, i) => (
+              {checklist.map((ph: ChecklistPhase, i) => (
                 <ChecklistPhaseView
                   key={ph.id}
                   phase={ph}
@@ -258,8 +303,8 @@ export default function DriverApp({
                         confirmed={endConfirmed}
                         summary={`${endDraft.time}, ${endDraft.place || 'место не указано'}`}
                         confirmLabel="Завершить смену"
-                        confirmDisabled={!endDraft.place.trim() || !endDraft.time}
-                        onConfirm={() => { setEndConfirmed(true); setFinished(true); }}
+                        confirmDisabled={endDisabled}
+                        onConfirm={finishShift}
                         onEdit={() => setEndConfirmed(false)}
                       >
                         <Field
@@ -268,12 +313,7 @@ export default function DriverApp({
                           onChange={(e) => setEndDraft((d) => ({ ...d, place: e.target.value }))}
                           placeholder="Офис, Алматы"
                         />
-                        <Field
-                          label="Время"
-                          type="time"
-                          value={endDraft.time}
-                          onChange={(e) => setEndDraft((d) => ({ ...d, time: e.target.value }))}
-                        />
+                        <Field label="Время" type="time" value={endDraft.time} onChange={(e) => setEndDraft((d) => ({ ...d, time: e.target.value }))} />
                         <div className="grid grid-cols-2 gap-3">
                           <Field
                             label="Касса, ₸"
@@ -290,20 +330,30 @@ export default function DriverApp({
                             placeholder="0"
                           />
                         </div>
-                        <Field
-                          label="Штрафы, ₸"
-                          inputMode="numeric"
-                          value={endDraft.cashFines}
-                          onChange={(e) => setEndDraft((d) => ({ ...d, cashFines: e.target.value.replace(/\D/g, '') }))}
-                          placeholder="0"
-                        />
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field
+                            label="Штрафы, ₸"
+                            inputMode="numeric"
+                            value={endDraft.cashFines}
+                            onChange={(e) => setEndDraft((d) => ({ ...d, cashFines: e.target.value.replace(/\D/g, '') }))}
+                            placeholder="0"
+                          />
+                          <Field
+                            label="Одометр, км"
+                            inputMode="numeric"
+                            value={endDraft.odoEnd}
+                            onChange={(e) => setEndDraft((d) => ({ ...d, odoEnd: e.target.value.replace(/\D/g, '') }))}
+                            placeholder="84515"
+                          />
+                        </div>
                       </ShiftInfoCard>
                     ) : (
                       <button
                         onClick={() => goToPhase(i + 1)}
                         className="p-btn p-btn-primary flex items-center justify-center gap-1.5 py-3.5"
                       >
-                        Далее<Icon name="chevron-up" size={15} className="rotate-90" />
+                        Далее
+                        <Icon name="chevron-up" size={15} className="rotate-90" />
                       </button>
                     )
                   }
@@ -314,7 +364,7 @@ export default function DriverApp({
         )}
 
         {tab === 'history' && <HistoryTab driver={driver} />}
-        {tab === 'profile' && <ProfileTab driver={driver} onLogout={onLogout} />}
+        {tab === 'profile' && <ProfileTab driver={driver} onLogout={onLogout} onSendWhatsApp={sendWhatsApp} />}
       </main>
 
       <BottomNav
@@ -327,78 +377,7 @@ export default function DriverApp({
         onChange={setTab}
       />
 
-      {finished && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#1a1d1e]/60 sm:items-center sm:p-6" onClick={() => setFinished(false)}>
-          <div
-            className="p-fade-up flex max-h-[88vh] w-full flex-col rounded-t-[28px] bg-white sm:max-w-sm sm:rounded-[28px]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 border-b border-[#e7e9e2] px-5 py-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#8fc640]/15 text-[#5e9128]">
-                <Icon name="check-circle" size={22} />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-base font-bold">Смена завершена</h3>
-                <p className="text-xs text-[#9a9d96]">{shiftDate} · {startDraft.car}</p>
-              </div>
-              <button onClick={() => setFinished(false)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f5f6f1] text-[#5c6066] transition hover:bg-[#e7e9e2]">
-                <Icon name="x" size={16} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-5 py-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-card p-4">
-                  <div className="text-[#8fc640]"><Icon name="check-circle" size={16} /></div>
-                  <p className="mt-2 text-2xl font-extrabold tabular-nums">{doneItems}<span className="text-sm font-semibold text-[#9a9d96]">/{totalItems}</span></p>
-                  <p className="p-eyebrow mt-0.5">Чек-лист</p>
-                </div>
-                <div className="p-card p-4">
-                  <div className="text-[#8fc640]"><Icon name="clock" size={16} /></div>
-                  <p className="mt-2 text-2xl font-extrabold tabular-nums">{endDraft.time}</p>
-                  <p className="p-eyebrow mt-0.5">Окончание</p>
-                </div>
-              </div>
-
-              <div className="p-card mt-3 p-4">
-                <div className="mb-2 flex items-center gap-2 text-sm font-bold"><Icon name="map" size={16} className="text-[#8fc640]" />Маршрут</div>
-                <div className="p-card-line flex items-center justify-between py-2 text-sm"><span className="text-[#5c6066]">Начало</span><span className="font-medium">{startDraft.place}, {startDraft.time}</span></div>
-                <div className="flex items-center justify-between py-2 text-sm"><span className="text-[#5c6066]">Завершение</span><span className="font-medium">{endDraft.place}, {endDraft.time}</span></div>
-              </div>
-
-              <div className="p-card mt-3 p-4">
-                <div className="mb-2 flex items-center gap-2 text-sm font-bold"><Icon name="wallet" size={16} className="text-[#8fc640]" />Касса</div>
-                <div className="p-card-line flex items-center justify-between py-2 text-sm"><span className="text-[#5c6066]">Начало смены</span><span className="font-medium tabular-nums">{money(startDraft.cashStart)}</span></div>
-                <div className="p-card-line flex items-center justify-between py-2 text-sm"><span className="text-[#5c6066]">Расходы</span><span className="font-medium tabular-nums">{money(endDraft.cashExpenses)}</span></div>
-                <div className="p-card-line flex items-center justify-between py-2 text-sm"><span className="text-[#5c6066]">Штрафы</span><span className="font-medium tabular-nums">{money(endDraft.cashFines)}</span></div>
-                <div className="flex items-center justify-between py-2 text-sm font-bold"><span>Итог смены</span><span className="tabular-nums text-[#5e9128]">{money(endDraft.cashEnd)}</span></div>
-              </div>
-
-              {remarks.length > 0 && (
-                <div className="p-card mt-3 p-4">
-                  <div className="mb-2 flex items-center gap-2 text-sm font-bold"><Icon name="warning" size={16} className="text-[#8fc640]" />Замечания</div>
-                  <div className="flex flex-col gap-2">
-                    {remarks.map((r, i) => (
-                      <div key={i} className="rounded-2xl bg-white p-2.5 text-sm ring-1 ring-inset ring-[#e7e9e2]">
-                        <div className="flex items-center gap-2 font-medium">
-                          {r.photos > 0 && <Icon name="camera" size={14} className="shrink-0 text-[#9a9d96]" />}
-                          {r.text}
-                        </div>
-                        {r.comment && <p className="mt-1 text-xs text-[#5c6066]">{r.comment}</p>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2 border-t border-[#e7e9e2] px-5 py-4">
-              <button onClick={copySummary} className="p-btn p-btn-outline flex-1 py-3 text-xs">Скопировать</button>
-              <button onClick={sendWhatsApp} className="p-btn p-btn-primary flex-1 py-3 text-xs">Отправить в WhatsApp</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {finishedShift && <ShiftReportModal shift={finishedShift} title="Смена завершена" onClose={resetShift} />}
     </div>
   );
 }
