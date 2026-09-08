@@ -267,6 +267,23 @@ export const SEED_ACKS: ProtoAck[] = [
   { id: 'ak2', driverId: 'd2', date: '2026-08-15', score: 2, total: 3 },
 ];
 
+/** Инструктаж действует 30 дней — потом водитель проходит его заново. */
+export const BRIEFING_VALID_DAYS = 30;
+
+export function latestAck(acks: ProtoAck[], driverId: string): ProtoAck | undefined {
+  return acks.filter((a) => a.driverId === driverId).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+}
+
+/**
+ * Допуск к смене: тест сдан без ошибок и не позже 30 дней назад.
+ * В проде такую проверку делает сервер — на клиенте она только для UX.
+ */
+export function isBriefingValid(acks: ProtoAck[], driverId: string): boolean {
+  const ack = latestAck(acks, driverId);
+  if (!ack || ack.score < ack.total) return false;
+  return daysUntil(ack.date) > -BRIEFING_VALID_DAYS;
+}
+
 /* ─── Чек-лист ───────────────────────────────────────────────────────────── */
 
 // Мутируемая копия реального чек-листа — редактор администратора в прототипе

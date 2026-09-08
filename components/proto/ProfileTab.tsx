@@ -1,6 +1,6 @@
 'use client';
 
-import { carLabel, formatDate, initials, type ProtoDriver } from '@/lib/proto-data';
+import { BRIEFING_VALID_DAYS, carLabel, formatDate, initials, isBriefingValid, latestAck, type ProtoDriver } from '@/lib/proto-data';
 import { useStore } from './store';
 import { Icon } from './icons';
 import { CardTitle, Pill, SectionHeader } from './ui';
@@ -11,13 +11,16 @@ export default function ProfileTab({
   driver,
   onLogout,
   onSendWhatsApp,
+  onRetakeBriefing,
 }: {
   driver: ProtoDriver;
   onLogout: () => void;
   onSendWhatsApp: () => void;
+  onRetakeBriefing: () => void;
 }) {
   const { cars, rules, acks } = useStore();
-  const ack = acks.filter((a) => a.driverId === driver.id).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  const ack = latestAck(acks, driver.id);
+  const briefingValid = isBriefingValid(acks, driver.id);
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4">
@@ -55,6 +58,23 @@ export default function ProfileTab({
         <Icon name="arrow-right" size={14} />
         Отправить сводку текущей смены в WhatsApp
       </button>
+
+      <div className="p-card p-4">
+        <CardTitle icon="shield" title="Инструктаж по ТБ" />
+        <p className="text-xs leading-relaxed text-[#5c6066]">
+          {briefingValid
+            ? `Тест сдан ${ack ? formatDate(ack.date) : ''} без ошибок. Допуск действует ${BRIEFING_VALID_DAYS} дней с этой даты.`
+            : ack
+              ? `Последняя попытка: ${ack.score}/${ack.total} от ${formatDate(ack.date)}. Нужно пройти заново — без этого смена не начнётся.`
+              : 'Тест ещё не пройден — без него смена не начнётся.'}
+        </p>
+        <button
+          onClick={onRetakeBriefing}
+          className={'p-btn mt-3 w-full py-3 text-xs ' + (briefingValid ? 'p-btn-outline' : 'p-btn-primary')}
+        >
+          {briefingValid ? 'Пройти инструктаж заново' : 'Пройти инструктаж'}
+        </button>
+      </div>
 
       {rules.length > 0 && (
         <>

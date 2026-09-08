@@ -68,6 +68,8 @@ type Store = {
   updateQuestion: (id: string, patch: Partial<QuizQuestion>) => void;
   removeQuestion: (id: string) => void;
 
+  addAck: (ack: ProtoAck) => void;
+
   setChecklist: (next: ChecklistPhase[]) => void;
 };
 
@@ -126,14 +128,14 @@ export function ProtoStoreProvider({ children }: { children: ReactNode }) {
       updateQuestion: (id, patch) => setQuiz((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q))),
       removeQuestion: (id) => setQuiz((prev) => prev.filter((q) => q.id !== id)),
 
+      // Новая попытка вытесняет прошлую по этому водителю — в журнале
+      // администратора остаётся актуальный результат.
+      addAck: (ack) => setAcks((prev) => [...prev.filter((a) => a.driverId !== ack.driverId), ack]),
+
       setChecklist,
     }),
     [cars, drivers, shifts, expenses, reminders, assignments, rules, quiz, acks, checklist]
   );
-
-  // setAcks пока используется только сидом — тест по ТБ водитель проходит в
-  // следующей итерации, здесь важно, что админ уже видит, кто ознакомлен.
-  void setAcks;
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

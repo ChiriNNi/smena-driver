@@ -7,6 +7,7 @@ import {
   carLabel,
   countChecklistItems,
   initials,
+  isBriefingValid,
   nowHHMM,
   todayISO,
   uid,
@@ -16,6 +17,7 @@ import {
   type ShiftRemark,
 } from '@/lib/proto-data';
 import { useStore } from './store';
+import BriefingFlow from './BriefingFlow';
 import ChecklistPhaseView from './ChecklistPhaseView';
 import HistoryTab from './HistoryTab';
 import ProfileTab from './ProfileTab';
@@ -32,9 +34,13 @@ type Tab = 'checklist' | 'history' | 'profile';
 const SHORT_PHASE_LABEL: Record<string, string> = { start: 'Начало', process: 'Процесс', end: 'Завершение' };
 
 export default function DriverApp({ driver, onLogout }: { driver: ProtoDriver; onLogout: () => void }) {
-  const { checklist, cars, addShift } = useStore();
+  const { checklist, cars, acks, addShift } = useStore();
 
   const [tab, setTab] = useState<Tab>('checklist');
+  // Инструктаж по ТБ: обязателен, если тест не сдан или просрочен. Держим в
+  // состоянии, а не в производном значении — иначе экран с результатом теста
+  // исчезал сам, как только допуск открывался, и водитель не видел разбора.
+  const [briefingOpen, setBriefingOpen] = useState(() => !isBriefingValid(acks, driver.id));
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState<Record<string, NoteEntry>>({});
@@ -162,6 +168,7 @@ export default function DriverApp({ driver, onLogout }: { driver: ProtoDriver; o
     setTab('history');
   }
 
+  const briefingValid = isBriefingValid(acks, driver.id);
   const startDisabled = !startDraft.place.trim() || !startDraft.time || !startDraft.carId;
   const endDisabled = !endDraft.place.trim() || !endDraft.time;
   const activeCars = cars.filter((c) => c.active || c.id === startDraft.carId);
@@ -225,7 +232,15 @@ export default function DriverApp({ driver, onLogout }: { driver: ProtoDriver; o
       </header>
 
       <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto pb-24">
-        {tab === 'checklist' && !startConfirmed && (
+        {tab === 'checklist' && briefingOpen && (
+          <BriefingFlow
+            driver={driver}
+            onDone={() => setBriefingOpen(false)}
+            onExit={briefingValid ? () => setBriefingOpen(false) : undefined}
+          />
+        )}
+
+        {tab === 'checklist' && !briefingOpen && !startConfirmed && (
           <div className="px-5 py-8">
             <div className="p-fade-up mx-auto mb-6 max-w-xs text-center">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#8fc640]/15 text-[#5e9128]">
@@ -249,7 +264,7 @@ export default function DriverApp({ driver, onLogout }: { driver: ProtoDriver; o
           </div>
         )}
 
-        {tab === 'checklist' && startConfirmed && (
+        {tab === 'checklist' && !briefingOpen && startConfirmed && (
           <>
             <div className="grid grid-cols-3 gap-2 border-b border-[#e7e9e2] bg-[#f5f6f1] px-3 py-3">
               {checklist.map((ph, i) => (
@@ -364,7 +379,17 @@ export default function DriverApp({ driver, onLogout }: { driver: ProtoDriver; o
         )}
 
         {tab === 'history' && <HistoryTab driver={driver} />}
-        {tab === 'profile' && <ProfileTab driver={driver} onLogout={onLogout} onSendWhatsApp={sendWhatsApp} />}
+        {tab === 'profile' && (
+          <ProfileTab
+            driver={driver}
+            onLogout={onLogout}
+            onSendWhatsApp={sendWhatsApp}
+            onRetakeBriefing={() => {
+              setBriefingOpen(true);
+              setTab('checklist');
+            }}
+          />
+        )}
       </main>
 
       <BottomNav
