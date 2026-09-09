@@ -2,8 +2,8 @@
 //
 // Почему без библиотеки @supabase/supabase-js: нам нужны ровно три операции
 // (загрузить, выдать временную ссылку, удалить), и все они — один fetch.
-// Зависимость ради этого не окупается, а service_role-ключ всё равно нельзя
-// отдавать в браузер, поэтому клиентская часть SDK бесполезна.
+// Зависимость ради этого не окупается, а секретный ключ проекта всё равно
+// нельзя отдавать в браузер, поэтому клиентская часть SDK бесполезна.
 //
 // Бакет приватный: наружу уходят только подписанные ссылки с ограниченным
 // сроком, поэтому фото повреждений не доступны по угадываемому адресу.
@@ -18,12 +18,22 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const MAX_UPLOAD_BYTES = 6 * 1024 * 1024;
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 
+/**
+ * Секретный ключ проекта. В панели Supabase он теперь называется
+ * SUPABASE_SECRET_KEY (значение вида sb_secret_…); в проектах, созданных
+ * раньше, та же роль называлась service_role — поддерживаем оба имени, чтобы
+ * переменная совпадала с тем, что показано в панели.
+ */
+function secretKey(): string | undefined {
+  return process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+}
+
 function config(): { url: string; key: string } {
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = secretKey();
   if (!url || !key) {
     throw new ApiError(
-      'Хранилище фото не настроено: задайте SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY в переменных окружения.',
+      'Хранилище фото не настроено: задайте SUPABASE_URL и SUPABASE_SECRET_KEY в переменных окружения.',
       503
     );
   }
@@ -32,7 +42,7 @@ function config(): { url: string; key: string } {
 
 /** Настроено ли хранилище — чтобы интерфейс мог скрыть загрузку фото, а не падать. */
 export function isStorageConfigured(): boolean {
-  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return Boolean(process.env.SUPABASE_URL && secretKey());
 }
 
 function authHeaders(key: string): Record<string, string> {

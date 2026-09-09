@@ -67,7 +67,7 @@ scripts/
 - **Повторное завершение смены не создаёт дубль** — по ключу идемпотентности
   `client_request_id`.
 - **Фото лежат в приватном бакете**, наружу уходят только подписанные ссылки с
-  ограниченным сроком. `service_role`-ключ используется только на сервере.
+  ограниченным сроком. Секретный ключ проекта читается только на сервере.
 
 ## Локальный запуск
 
@@ -102,10 +102,16 @@ docker run -d --name smena-test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=smena_t
 ## Настройка Supabase
 
 1. **Проект**: supabase.com → New Project.
-2. **Строка подключения**: Project Settings → Database → Connection string →
-   режим **Session pooler**. Значение идёт в `DATABASE_URL`.
-3. **Ключи для Storage**: Project Settings → API → `Project URL` и
-   `service_role` → `SUPABASE_URL` и `SUPABASE_SERVICE_ROLE_KEY`.
+2. **Строка подключения**: Connect → вкладка **Direct** (Connection string).
+   Для Vercel берите **Transaction pooler** (порт 6543) — функции там
+   короткоживущие, и режим транзакций держит меньше соединений к базе.
+   Значение идёт в `DATABASE_URL`.
+3. **Ключи для Storage**: Connect → вкладка **Server** (или Project Settings →
+   API keys) → `SUPABASE_URL` и `SUPABASE_SECRET_KEY` (значение `sb_secret_…`).
+   `SUPABASE_PUBLISHABLE_KEY` и `SUPABASE_JWKS_URL` не нужны: они для проверки
+   токенов Supabase Auth, а вход у нас свой — по телефону и PIN. Пакет
+   `@supabase/server` тоже не нужен — в базу ходим через `pg`, в Storage
+   обычным fetch.
 4. **Бакет**: Storage → New bucket → имя `shift-photos`, галочку **Public не
    ставить**.
 5. **Секрет сессии**:
@@ -114,7 +120,7 @@ docker run -d --name smena-test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=smena_t
    ```
    Значение идёт в `SESSION_SECRET`.
 
-Пока `SUPABASE_URL` и `SUPABASE_SERVICE_ROLE_KEY` не заданы, всё работает,
+Пока `SUPABASE_URL` и `SUPABASE_SECRET_KEY` не заданы, всё работает,
 кроме загрузки фото: `/api/photos` отвечает 503, а `/api/settings` сообщает
 интерфейсу `photoUploadEnabled: false`.
 
@@ -138,7 +144,7 @@ PIN по умолчанию — последние 4 цифры номера (м
 1. Залить проект в GitHub-репозиторий.
 2. vercel.com → New Project → импортировать репозиторий.
 3. Settings → Environment Variables: `DATABASE_URL`, `SESSION_SECRET`,
-   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+   `SUPABASE_URL`, `SUPABASE_SECRET_KEY`.
 4. Применить схему к продакшн-базе:
    ```bash
    DATABASE_URL="<строка продакшн-БД>" npm run db:migrate

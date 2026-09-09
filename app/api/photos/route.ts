@@ -6,14 +6,14 @@ export const dynamic = 'force-dynamic';
 
 // Загрузка фото к замечанию чек-листа.
 //
-// Файл идёт через сервер, а не напрямую в Supabase: service_role-ключ нельзя
-// показывать браузеру, а бакет приватный. В ответ возвращается путь (его
+// Файл идёт через сервер, а не напрямую в Supabase: секретный ключ проекта
+// нельзя показывать браузеру, а бакет приватный. В ответ возвращается путь (его
 // водитель приложит к смене) и временная ссылка для превью на экране.
 
 export async function POST(req: NextRequest) {
   return withUser(async (user) => {
     if (!isStorageConfigured()) {
-      throw new ApiError('Загрузка фото не настроена: задайте SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY.', 503);
+      throw new ApiError('Загрузка фото не настроена: задайте SUPABASE_URL и SUPABASE_SECRET_KEY.', 503);
     }
 
     const form = await req.formData().catch(() => null);
