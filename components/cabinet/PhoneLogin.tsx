@@ -78,15 +78,18 @@ export default function PhoneLogin() {
     // на случай маленького экрана или альбомной ориентации.
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex min-h-full max-w-sm flex-col px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-8">
-        <div className="p-fade-up text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element -- статичный логотип холдинга, next/image не нужен ради одной картинки */}
-          <img src="/ic-group-logo.png" alt="IC Group" className="mx-auto h-14 w-auto" />
-          <p className="mt-3 text-sm text-[#5c6066]">Вход в кабинет</p>
-        </div>
-
         {step === 'phone' ? (
           <>
-            <div className="p-fade-up flex flex-1 flex-col justify-center py-8">
+            {/* На первом шаге логотип идёт вместе с полем одним блоком по центру:
+                прижатый к верху, он отрывался от единственного поля на экране и
+                висел сам по себе. */}
+            <div className="p-fade-up flex flex-1 flex-col pb-8 pt-[7vh]">
+              <div className="mb-7 text-center">
+                {/* eslint-disable-next-line @next/next/no-img-element -- статичный логотип холдинга, next/image не нужен ради одной картинки */}
+                <img src="/ic-group-logo.png" alt="IC Group" className="mx-auto h-14 w-auto" />
+                <p className="mt-3 text-sm text-[#5c6066]">Вход в кабинет</p>
+              </div>
+
               <label className="p-eyebrow mb-2 block">Номер телефона</label>
               <input
                 type="tel"
@@ -113,6 +116,14 @@ export default function PhoneLogin() {
           </>
         ) : (
           <>
+            {/* На шаге PIN логотип остаётся сверху: снизу его место занимает
+                клавиатура, и экран заполнен по всей высоте. */}
+            <div className="p-fade-up text-center">
+              {/* eslint-disable-next-line @next/next/no-img-element -- статичный логотип холдинга, next/image не нужен ради одной картинки */}
+              <img src="/ic-group-logo.png" alt="IC Group" className="mx-auto h-14 w-auto" />
+              <p className="mt-3 text-sm text-[#5c6066]">Вход в кабинет</p>
+            </div>
+
             <div className="flex flex-1 flex-col items-center justify-center py-4">
               <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-[#8fc640]/15 text-[#5e9128]">
                 <Icon name="user" size={26} />
