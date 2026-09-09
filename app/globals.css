@@ -31,6 +31,10 @@ body {
    слоёв CSS они будут перебивать модификаторы Tailwind вроде last:border-none. */
 @layer components {
   .app {
+    /* Телефон: без серой вспышки при касании, без задержки двойного тапа
+       и без выделения текста при долгом нажатии на кнопку. */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
     --p-ink: #1a1d1e;
     --p-ink-soft: #5c6066;
     --p-ink-faint: #9a9d96;
@@ -46,18 +50,35 @@ body {
   .app .p-card { border-radius: 28px; background: var(--p-tint); }
   .app .p-card-line { border-bottom: 1px solid var(--p-border); }
   .app .p-input {
-    width: 100%; border-radius: 16px; border: 1.5px solid var(--p-border); background: #fff;
+    display: block; width: 100%; max-width: 100%;
+    /* min-width: 0 обязателен: у полей даты и времени в Safari есть своя
+       минимальная ширина, и без этого правила такое поле выталкивает соседа
+       из двухколоночной сетки (время и касса наезжали друг на друга). */
+    min-width: 0; min-height: 48px;
+    border-radius: 16px; border: 1.5px solid var(--p-border); background: #fff;
     /* 16px обязателен: при меньшем размере Safari на iPhone зумит страницу
        при фокусе на поле, и вёрстка «прыгает». */
-    padding: 12px 16px; font-size: 16px; color: var(--p-ink); outline: none;
+    padding: 12px 16px; font-size: 16px; line-height: 1.4; color: var(--p-ink); outline: none;
     transition: border-color 0.25s ease;
   }
+  /* Системное оформление снимаем у текстовых полей и полей даты/времени —
+     у select оставляем, иначе пропадёт стрелка выбора. */
+  .app .p-input:not(select) { -webkit-appearance: none; appearance: none; }
+  /* Safari на iPhone центрирует значение даты/времени и делает поле ниже
+     остальных — выравниваем с обычными полями. */
+  .app .p-input::-webkit-date-and-time-value { text-align: left; min-height: 1.4em; }
+  .app .p-input[type='date'], .app .p-input[type='time'] { height: 48px; }
   .app .p-input::placeholder { color: var(--p-ink-faint); }
   .app .p-input:focus { border-color: var(--p-green); }
   .app .p-btn {
     border-radius: 999px; font-weight: 600; font-size: 14px; letter-spacing: 0.02em;
+    /* Нижняя граница зоны нажатия для любой кнопки — включая мелкие «Добавить»
+       и вкладки разделов. Главные кнопки и так выше (48+). */
+    min-height: 40px;
     transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   }
+  .app button, .app a, .app label { touch-action: manipulation; }
+  .app .p-btn, .app .p-key { -webkit-user-select: none; user-select: none; }
   .app .p-btn:active { transform: scale(0.97); }
   .app .p-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
   .app .p-btn-primary { background: var(--p-green); color: #fff; }

@@ -130,7 +130,7 @@ export default function ChecklistPhaseView({
                         <button
                           onClick={() => onOpenNote(noteOpen ? null : item.id)}
                           className={
-                            'p-btn flex shrink-0 items-center gap-1 px-2.5 py-1.5 text-[11px] ' +
+                            'p-btn flex min-h-10 shrink-0 items-center gap-1 px-2.5 py-1.5 text-[11px] ' +
                             (hasNote
                               ? 'bg-[#8fc640]/15 text-[#5e9128]'
                               : 'bg-white text-[#9a9d96] ring-1 ring-inset ring-[#e7e9e2] hover:text-[#5c6066]')

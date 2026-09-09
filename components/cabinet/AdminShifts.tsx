@@ -7,7 +7,7 @@ import type { Shift } from '@/lib/model';
 import { useStore } from './store';
 import { Icon } from './icons';
 import ShiftReportModal from './ShiftReportModal';
-import { EmptyState, Pill, SectionHeader, SelectField, StatTile } from './ui';
+import { EmptyState, Field, Pill, SectionHeader, SelectField, StatTile } from './ui';
 
 // Смены всех водителей: сводка за период, фильтры, экспорт и отчёт по клику.
 
@@ -134,14 +134,8 @@ export default function AdminShifts() {
             ))}
           </SelectField>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="p-eyebrow mb-1.5 block">Период с</label>
-              <input type="date" className="p-input" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </div>
-            <div>
-              <label className="p-eyebrow mb-1.5 block">по</label>
-              <input type="date" className="p-input" value={to} onChange={(e) => setTo(e.target.value)} />
-            </div>
+            <Field label="Период с" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <Field label="по" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </div>
           {filtersActive && (
             <button onClick={resetFilters} className="p-btn p-btn-outline py-2.5 text-xs">

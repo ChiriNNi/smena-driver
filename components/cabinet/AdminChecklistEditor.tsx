@@ -171,7 +171,7 @@ export default function AdminChecklistEditor() {
               <div key={idx} className="p-card-line flex items-center gap-1 py-1.5 last:border-none">
                 <button
                   onClick={() => openEdit({ kind: 'item', sectionId: section.id, index: idx })}
-                  className="min-w-0 flex-1 py-1 text-left"
+                  className="flex min-h-10 min-w-0 flex-1 items-center py-1 text-left"
                 >
                   <span className="text-sm">{item.text}</span>
                   {item.qty && <span className="ml-2 text-xs font-semibold text-[#9a9d96]">{item.qty}</span>}

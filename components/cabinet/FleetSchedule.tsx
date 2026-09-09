@@ -5,7 +5,7 @@ import { carLabel, driverName, formatDate, todayISO } from '@/lib/labels';
 import type { Assignment } from '@/lib/model';
 import { useStore } from './store';
 import { Icon } from './icons';
-import { ConfirmDialog, EmptyState, IconButton, Pill, SectionHeader, SelectField, Sheet } from './ui';
+import { ConfirmDialog, EmptyState, Field, IconButton, Pill, SectionHeader, SelectField, Sheet } from './ui';
 
 // График смен: кто на какой машине и когда работает. Сгруппирован по датам —
 // так администратор видит день целиком и замечает пересечения.
@@ -104,10 +104,7 @@ export default function FleetSchedule() {
           }
         >
           <div className="flex flex-col gap-3">
-            <div>
-              <label className="p-eyebrow mb-1.5 block">Дата</label>
-              <input type="date" className="p-input" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
-            </div>
+            <Field label="Дата" type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
             <SelectField label="Водитель" value={form.driverId} onChange={(e) => setForm((f) => ({ ...f, driverId: e.target.value }))}>
               {activeDrivers.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -125,14 +122,8 @@ export default function FleetSchedule() {
                 ))}
             </SelectField>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="p-eyebrow mb-1.5 block">Начало</label>
-                <input type="time" className="p-input" value={form.timeStart} onChange={(e) => setForm((f) => ({ ...f, timeStart: e.target.value }))} />
-              </div>
-              <div>
-                <label className="p-eyebrow mb-1.5 block">Завершение</label>
-                <input type="time" className="p-input" value={form.timeEnd} onChange={(e) => setForm((f) => ({ ...f, timeEnd: e.target.value }))} />
-              </div>
+              <Field label="Начало" type="time" value={form.timeStart} onChange={(e) => setForm((f) => ({ ...f, timeStart: e.target.value }))} />
+              <Field label="Завершение" type="time" value={form.timeEnd} onChange={(e) => setForm((f) => ({ ...f, timeEnd: e.target.value }))} />
             </div>
           </div>
         </Sheet>

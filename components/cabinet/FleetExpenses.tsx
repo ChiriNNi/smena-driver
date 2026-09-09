@@ -156,10 +156,7 @@ export default function FleetExpenses() {
                 ))}
             </SelectField>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="p-eyebrow mb-1.5 block">Дата</label>
-                <input type="date" className="p-input" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
-              </div>
+              <Field label="Дата" type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
               <Field
                 label="Сумма, ₸"
                 inputMode="numeric"

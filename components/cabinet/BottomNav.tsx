@@ -38,7 +38,7 @@ export default function BottomNav<T extends string>({
             <button
               key={item.id}
               onClick={() => onChange(item.id)}
-              className="relative z-10 flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[9px] font-semibold transition-colors duration-300"
+              className="relative z-10 flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] font-semibold transition-colors duration-300"
             >
               <Icon name={item.icon} size={15} className={isActive ? 'text-white' : 'text-[#9a9d96]'} />
               <span className={isActive ? 'text-white' : 'text-[#9a9d96]'}>{item.label}</span>

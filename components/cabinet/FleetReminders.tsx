@@ -145,10 +145,7 @@ export default function FleetReminders() {
                 </option>
               ))}
             </SelectField>
-            <div>
-              <label className="p-eyebrow mb-1.5 block">Срок</label>
-              <input type="date" className="p-input" value={form.dueDate} onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))} />
-            </div>
+            <Field label="Срок" type="date" value={form.dueDate} onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))} />
             <Field label="Заметка" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="ТО-4, пробег 90 000 км" />
           </div>
         </Sheet>

@@ -163,12 +163,17 @@ export default function AdminQuiz() {
                     <button
                       onClick={() => setForm((f) => ({ ...f, correct: oi }))}
                       aria-label="Правильный ответ"
-                      className={
-                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition ' +
-                        (form.correct === oi ? 'border-[#8fc640] bg-[#8fc640] text-white' : 'border-[#d7dacf] bg-white text-transparent')
-                      }
+                      // Зона нажатия 40px, сам кружок — 28px внутри неё.
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
                     >
-                      <Icon name="check" size={14} />
+                      <span
+                        className={
+                          'flex h-7 w-7 items-center justify-center rounded-full border-2 transition ' +
+                          (form.correct === oi ? 'border-[#8fc640] bg-[#8fc640] text-white' : 'border-[#d7dacf] bg-white text-transparent')
+                        }
+                      >
+                        <Icon name="check" size={14} />
+                      </span>
                     </button>
                     <input
                       className="p-input text-sm"

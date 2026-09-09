@@ -411,7 +411,7 @@ export default function DriverApp({ driver, onLogout }: { driver: Driver; onLogo
                   key={ph.id}
                   onClick={() => goToPhase(i)}
                   className={
-                    'p-btn flex items-center justify-center gap-1 whitespace-nowrap px-2 py-2 text-[11px] ' +
+                    'p-btn flex min-h-11 items-center justify-center gap-1 whitespace-nowrap px-2 py-2 text-[11px] ' +
                     (i === phaseIdx
                       ? 'p-btn-primary'
                       : 'bg-white text-[#5c6066] ring-1 ring-inset ring-[#e7e9e2] hover:text-[#1a1d1e] hover:ring-[#d7dacf]')
