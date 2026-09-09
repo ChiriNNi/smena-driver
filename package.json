@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "setup:env": "node scripts/setup-env.mjs",
+    "check:env": "node scripts/check-env.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed": "node scripts/seed.mjs"
   },
