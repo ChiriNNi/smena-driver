@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { ChecklistItem, ChecklistPhase, ChecklistSection } from '@/lib/checklist-data';
-import { countChecklistItems, uid } from '@/lib/proto-data';
+import { countTemplateItems, type PhaseId, type TemplateItem, type TemplatePhase, type TemplateSection } from '@/lib/model';
 import { useStore } from './store';
 import { Icon, phaseIconName, sectionIconName } from './icons';
 import { ConfirmDialog, Field, IconButton, Pill, SectionHeader, SegmentedTabs, Sheet, StatTile } from './ui';
@@ -15,8 +14,9 @@ type Target =
   | { kind: 'item'; sectionId: string; index: number };
 
 export default function AdminChecklistEditor() {
-  const { checklist, setChecklist } = useStore();
-  const [phaseId, setPhaseId] = useState<ChecklistPhase['id']>('start');
+  const { checklist, saveChecklist } = useStore();
+  const [phaseId, setPhaseId] = useState<PhaseId>('start');
+  const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<Target | 'new-section' | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Target | null>(null);
   const [newItemText, setNewItemText] = useState<Record<string, string>>({});
@@ -25,14 +25,25 @@ export default function AdminChecklistEditor() {
   const phaseIdx = checklist.findIndex((p) => p.id === phaseId);
   const phase = checklist[phaseIdx];
 
-  function update(mutate: (draft: ChecklistPhase[]) => void) {
-    const next = JSON.parse(JSON.stringify(checklist)) as ChecklistPhase[];
+  /**
+   * Правка уходит на сервер целиком: он присылает обратно шаблон с настоящими
+   * id новых пунктов. Пункт, удалённый здесь, в базе помечается неактивным —
+   * сданные смены, где он был отмечен, остаются целыми.
+   */
+  function update(mutate: (draft: TemplatePhase[]) => void) {
+    const next = JSON.parse(JSON.stringify(checklist)) as TemplatePhase[];
     mutate(next);
-    setChecklist(next);
+    setSaving(true);
+    void saveChecklist(next).finally(() => setSaving(false));
   }
 
-  function sectionOf(draft: ChecklistPhase[], sectionId: string): ChecklistSection {
+  function sectionOf(draft: TemplatePhase[], sectionId: string): TemplateSection {
     return draft[phaseIdx].sections.find((s) => s.id === sectionId)!;
+  }
+
+  /** Временный id до сохранения: сервер отличает его от настоящего и создаёт запись. */
+  function tempId(): string {
+    return `new_${Math.random().toString(36).slice(2, 9)}`;
   }
 
   /* ─── Пункты ───────────────────────────────────────────────────────────── */
@@ -40,7 +51,7 @@ export default function AdminChecklistEditor() {
   function addItem(sectionId: string) {
     const text = (newItemText[sectionId] ?? '').trim();
     if (!text) return;
-    update((draft) => sectionOf(draft, sectionId).items.push({ text }));
+    update((draft) => sectionOf(draft, sectionId).items.push({ id: tempId(), text }));
     setNewItemText((m) => ({ ...m, [sectionId]: '' }));
   }
 
@@ -76,9 +87,10 @@ export default function AdminChecklistEditor() {
     if (editing === 'new-section') {
       update((draft) =>
         draft[phaseIdx].sections.push({
-          // Иконка подбирается по id в sectionIconName(); у своих разделов
-          // код неизвестный, поэтому там будет иконка по умолчанию.
-          id: `custom_${uid('s')}`,
+          id: tempId(),
+          // slug пустой: иконку по нему не подобрать, поэтому у своего раздела
+          // будет иконка по умолчанию (см. sectionIconName).
+          slug: '',
           title: form.title.trim(),
           notable: form.notable,
           items: [],
@@ -92,7 +104,7 @@ export default function AdminChecklistEditor() {
       });
     } else if (editing && editing.kind === 'item') {
       update((draft) => {
-        const item: ChecklistItem = sectionOf(draft, editing.sectionId).items[editing.index];
+        const item: TemplateItem = sectionOf(draft, editing.sectionId).items[editing.index];
         item.text = form.title.trim();
         if (form.qty.trim()) item.qty = form.qty.trim();
         else delete item.qty;
@@ -118,11 +130,11 @@ export default function AdminChecklistEditor() {
   return (
     <>
       <div className="grid grid-cols-2 gap-3">
-        <StatTile icon="clipboard" value={countChecklistItems(checklist)} label="Пунктов всего" />
+        <StatTile icon="clipboard" value={countTemplateItems(checklist)} label="Пунктов всего" />
         <StatTile icon="box" value={phase?.sections.length ?? 0} label="Секций в фазе" />
       </div>
 
-      <SegmentedTabs<ChecklistPhase['id']>
+      <SegmentedTabs<PhaseId>
         items={checklist.map((p) => ({ id: p.id, label: p.phase }))}
         active={phaseId}
         onChange={setPhaseId}
@@ -130,6 +142,7 @@ export default function AdminChecklistEditor() {
 
       <SectionHeader
         title={`${phase?.phase ?? ''} · ${phase?.sections.reduce((s, x) => s + x.items.length, 0) ?? 0} пунктов`}
+        hint={saving ? 'сохраняем…' : 'правки сразу видны водителям'}
         action={
           <button onClick={openNewSection} className="p-btn p-btn-primary flex items-center gap-1.5 px-3.5 py-2 text-[11px]">
             <Icon name="plus" size={13} />
@@ -141,7 +154,7 @@ export default function AdminChecklistEditor() {
       {phase?.sections.map((section) => (
         <div key={section.id} className="p-card p-4">
           <div className="mb-1 flex items-center gap-2">
-            <Icon name={sectionIconName(section.id)} size={16} className="shrink-0 text-[#8fc640]" />
+            <Icon name={sectionIconName(section.slug)} size={16} className="shrink-0 text-[#8fc640]" />
             <h3 className="min-w-0 flex-1 truncate text-sm font-bold">{section.title}</h3>
             {section.notable && <Pill tone="warn">фото</Pill>}
             <IconButton icon="pencil" label="Изменить секцию" onClick={() => openEdit({ kind: 'section', sectionId: section.id })} />

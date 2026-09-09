@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { uid, type ProtoRule } from '@/lib/proto-data';
+import type { Rule } from '@/lib/model';
 import { useStore } from './store';
 import { Icon } from './icons';
 import { ConfirmDialog, EmptyState, Field, IconButton, SectionHeader, Sheet, TextField } from './ui';
@@ -11,8 +11,8 @@ import { ConfirmDialog, EmptyState, Field, IconButton, SectionHeader, Sheet, Tex
 
 export default function AdminRules() {
   const { rules, addRule, updateRule, removeRule } = useStore();
-  const [editing, setEditing] = useState<ProtoRule | 'new' | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<ProtoRule | null>(null);
+  const [editing, setEditing] = useState<Rule | 'new' | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Rule | null>(null);
   const [form, setForm] = useState({ title: '', body: '' });
 
   function openNew() {
@@ -20,7 +20,7 @@ export default function AdminRules() {
     setEditing('new');
   }
 
-  function openEdit(rule: ProtoRule) {
+  function openEdit(rule: Rule) {
     setForm({ title: rule.title, body: rule.body });
     setEditing(rule);
   }
@@ -28,9 +28,9 @@ export default function AdminRules() {
   function save() {
     if (!form.title.trim()) return;
     if (editing === 'new') {
-      addRule({ id: uid('ru'), title: form.title.trim(), body: form.body.trim() });
+      void addRule({ title: form.title.trim(), body: form.body.trim() });
     } else if (editing) {
-      updateRule(editing.id, { title: form.title.trim(), body: form.body.trim() });
+      void updateRule(editing.id, { title: form.title.trim(), body: form.body.trim() });
     }
     setEditing(null);
   }

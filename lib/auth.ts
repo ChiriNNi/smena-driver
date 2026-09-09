@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
-import { queryOne } from './db';
+import { query, queryOne } from './db';
 import { toDriver, type Driver, type DriverRow, type Role } from './model';
 
 // Сессии кабинета: вход по номеру телефона и PIN, роль лежит в подписанном
@@ -129,18 +129,57 @@ export function comparePin(pin: string, hash: string): Promise<boolean> {
 }
 
 /**
- * Проверка входа: номер телефона (нормализованный) + PIN.
- * Возвращает null при любой неудаче, не уточняя причину — по ответу нельзя
- * узнать, существует ли такой номер в системе.
+ * Сколько неудачных попыток подряд допускается и на сколько минут после этого
+ * закрывается вход. PIN из 4 цифр — это 10 000 вариантов: без такого предела
+ * его перебирает скрипт за считаные минуты.
  */
-export async function authenticate(phoneDigits: string, pin: string): Promise<Driver | null> {
-  const row = await queryOne<DriverRow & { pin_hash: string }>(
-    `SELECT ${DRIVER_FIELDS}, pin_hash FROM drivers WHERE phone_digits = $1`,
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCK_MINUTES = 15;
+
+export type AuthResult =
+  | { ok: true; user: Driver }
+  | { ok: false; lockedMinutes: number }
+  | { ok: false; lockedMinutes?: undefined };
+
+/**
+ * Проверка входа: номер телефона (нормализованный) + PIN.
+ *
+ * При неудаче не уточняет, что именно не подошло — по ответу нельзя узнать,
+ * зарегистрирован ли номер. Исключение — блокировка: о ней сказать нужно,
+ * иначе водитель будет считать, что забыл PIN, и звонить администратору.
+ */
+export async function authenticate(phoneDigits: string, pin: string): Promise<AuthResult> {
+  const row = await queryOne<DriverRow & { pin_hash: string; failed_attempts: number; locked_until: string | null }>(
+    `SELECT ${DRIVER_FIELDS}, pin_hash, failed_attempts, locked_until FROM drivers WHERE phone_digits = $1`,
     [phoneDigits]
   );
-  if (!row || !row.active) return null;
-  if (!(await comparePin(pin, row.pin_hash))) return null;
-  return toDriver(row);
+  if (!row || !row.active) return { ok: false };
+
+  if (row.locked_until) {
+    const left = new Date(row.locked_until).getTime() - Date.now();
+    if (left > 0) return { ok: false, lockedMinutes: Math.max(1, Math.ceil(left / 60000)) };
+  }
+
+  if (await comparePin(pin, row.pin_hash)) {
+    // Счётчик сбрасываем только если он не нулевой — лишний UPDATE на каждый
+    // вход ни к чему.
+    if (row.failed_attempts > 0 || row.locked_until) {
+      await query('UPDATE drivers SET failed_attempts = 0, locked_until = NULL WHERE id = $1', [row.id]);
+    }
+    return { ok: true, user: toDriver(row) };
+  }
+
+  const attempts = row.failed_attempts + 1;
+  if (attempts >= MAX_FAILED_ATTEMPTS) {
+    await query(
+      `UPDATE drivers SET failed_attempts = 0, locked_until = now() + ($2 || ' minutes')::interval WHERE id = $1`,
+      [row.id, String(LOCK_MINUTES)]
+    );
+    return { ok: false, lockedMinutes: LOCK_MINUTES };
+  }
+
+  await query('UPDATE drivers SET failed_attempts = $2 WHERE id = $1', [row.id, attempts]);
+  return { ok: false };
 }
 
-export { SESSION_TTL_DAYS };
+export { SESSION_TTL_DAYS, MAX_FAILED_ATTEMPTS, LOCK_MINUTES };

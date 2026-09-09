@@ -30,3 +30,19 @@ export function compressImageToDataURL(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+/**
+ * То же сжатие, но результат — файл для отправки на сервер.
+ *
+ * Фото с телефона весит 3–8 МБ, а по факту нужно показать скол на бампере:
+ * после сжатия это 100–200 КБ, что важно и для мобильного интернета водителя,
+ * и для места в хранилище.
+ */
+export async function compressImageToFile(file: File): Promise<File> {
+  const dataUrl = await compressImageToDataURL(file);
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], 'photo.jpg', { type: 'image/jpeg' });
+}

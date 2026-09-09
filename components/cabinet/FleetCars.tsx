@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { km, money, uid, type ProtoCar } from '@/lib/proto-data';
+import { km, money } from '@/lib/labels';
+import type { Car } from '@/lib/model';
 import { useStore } from './store';
 import { Icon } from './icons';
 import { ConfirmDialog, EmptyState, Field, IconButton, Pill, SectionHeader, Sheet } from './ui';
@@ -11,8 +12,8 @@ import { ConfirmDialog, EmptyState, Field, IconButton, Pill, SectionHeader, Shee
 
 export default function FleetCars() {
   const { cars, shifts, expenses, drivers, addCar, updateCar, removeCar } = useStore();
-  const [editing, setEditing] = useState<ProtoCar | 'new' | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<ProtoCar | null>(null);
+  const [editing, setEditing] = useState<Car | 'new' | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Car | null>(null);
   const [model, setModel] = useState('');
   const [plate, setPlate] = useState('');
 
@@ -36,7 +37,7 @@ export default function FleetCars() {
     setEditing('new');
   }
 
-  function openEdit(car: ProtoCar) {
+  function openEdit(car: Car) {
     setModel(car.model);
     setPlate(car.plate);
     setEditing(car);
@@ -45,14 +46,14 @@ export default function FleetCars() {
   function save() {
     if (!model.trim() || !plate.trim()) return;
     if (editing === 'new') {
-      addCar({ id: uid('c'), model: model.trim(), plate: plate.trim().toUpperCase(), active: true });
+      void addCar({ model: model.trim(), plate: plate.trim() });
     } else if (editing) {
-      updateCar(editing.id, { model: model.trim(), plate: plate.trim().toUpperCase() });
+      void updateCar(editing.id, { model: model.trim(), plate: plate.trim() });
     }
     setEditing(null);
   }
 
-  function tryDelete(car: ProtoCar) {
+  function tryDelete(car: Car) {
     if (stats[car.id]?.shifts > 0) return; // защита: по авто есть смены
     setConfirmDelete(car);
   }
@@ -89,7 +90,7 @@ export default function FleetCars() {
                     <IconButton
                       icon="power"
                       label={car.active ? 'Деактивировать' : 'Вернуть в работу'}
-                      onClick={() => updateCar(car.id, { active: !car.active })}
+                      onClick={() => void updateCar(car.id, { active: !car.active })}
                     />
                     <IconButton icon="trash" label="Удалить" tone="danger" disabled={locked} onClick={() => tryDelete(car)} />
                   </div>
@@ -161,7 +162,7 @@ export default function FleetCars() {
           message={`${confirmDelete.model} — ${confirmDelete.plate} исчезнет из списка. Действие необратимо.`}
           onCancel={() => setConfirmDelete(null)}
           onConfirm={() => {
-            removeCar(confirmDelete.id);
+            void removeCar(confirmDelete.id);
             setConfirmDelete(null);
           }}
         />

@@ -42,6 +42,11 @@ CREATE TABLE IF NOT EXISTS drivers (
 
 CREATE INDEX IF NOT EXISTS idx_drivers_role ON drivers(role);
 
+-- Защита от подбора PIN: он всего из 4 цифр, то есть 10 000 вариантов —
+-- без ограничения попыток перебирается скриптом за минуты.
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+
 /* ─── Шаблон чек-листа (правится администратором) ────────────────────────── */
 
 CREATE TABLE IF NOT EXISTS checklist_sections (

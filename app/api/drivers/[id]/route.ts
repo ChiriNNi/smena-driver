@@ -63,6 +63,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       const pin = body.resetPin === true ? pinFromPhone(phone) : str(body, 'pin', { required: true });
       if (!isValidPin(pin)) throw new ApiError('PIN должен состоять из 4 цифр.');
       set('pin_hash', await hashPin(pin));
+      // Сброс PIN снимает и блокировку от подбора: иначе водителю, который
+      // забыл PIN и заблокировал вход, пришлось бы ещё ждать 15 минут.
+      set('failed_attempts', 0);
+      set('locked_until', null);
     }
 
     if (sets.length === 0) throw new ApiError('Нечего обновлять.');

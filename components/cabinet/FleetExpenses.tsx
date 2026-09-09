@@ -1,17 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import {
-  carLabel,
-  driverName,
-  EXPENSE_CATEGORIES,
-  formatDate,
-  money,
-  todayISO,
-  uid,
-  type ExpenseCategory,
-  type ProtoExpense,
-} from '@/lib/proto-data';
+import { carLabel, driverName, formatDate, money, todayISO } from '@/lib/labels';
+import { EXPENSE_CATEGORIES, type Expense, type ExpenseCategory } from '@/lib/model';
 import { useStore } from './store';
 import { Icon } from './icons';
 import { ConfirmDialog, EmptyState, Field, IconButton, Pill, SectionHeader, SelectField, Sheet, StatTile } from './ui';
@@ -23,7 +14,7 @@ export default function FleetExpenses() {
   const { expenses, cars, drivers, addExpense, removeExpense } = useStore();
   const [carFilter, setCarFilter] = useState('all');
   const [adding, setAdding] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState<ProtoExpense | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Expense | null>(null);
 
   const [form, setForm] = useState({
     carId: cars[0]?.id ?? '',
@@ -53,8 +44,7 @@ export default function FleetExpenses() {
 
   function save() {
     if (!form.carId || !form.amount) return;
-    addExpense({
-      id: uid('e'),
+    void addExpense({
       carId: form.carId,
       driverId: form.driverId,
       date: form.date,

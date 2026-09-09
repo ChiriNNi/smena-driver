@@ -1,8 +1,8 @@
 // Типизированный клиент API для компонентов кабинета.
 //
-// Один файл на все запросы: подключение интерфейса к серверу сводится к
-// замене обращений к демо-хранилищу (components/proto/store.tsx) на вызовы
-// отсюда, без разбросанных по компонентам fetch и «магических» адресов.
+// Один файл на все запросы: компоненты работают через хранилище
+// (components/cabinet/store.tsx), которое обращается сюда, а не разбрасывают
+// fetch и «магические» адреса по экранам.
 
 import type {
   Assignment,
@@ -66,6 +66,8 @@ export type SessionResponse = {
   user: Driver | null;
   briefing?: BriefingStatus;
   settings?: AppSettings;
+  /** Настроено ли хранилище: без него загрузка фото недоступна. */
+  photoUploadEnabled?: boolean;
 };
 
 export const session = {
@@ -99,7 +101,7 @@ export type DriverInput = {
 export const drivers = {
   list: () => get<{ drivers: Driver[] }>('/api/drivers').then((r) => r.drivers),
   create: (data: DriverInput) => send<{ driver: Driver }>('/api/drivers', 'POST', data).then((r) => r.driver),
-  update: (id: string, patch: Partial<DriverInput> & { active?: boolean }) =>
+  update: (id: string, patch: Partial<DriverInput> & { active?: boolean; resetPin?: boolean }) =>
     send<{ driver: Driver }>(`/api/drivers/${id}`, 'PATCH', patch).then((r) => r.driver),
   /** Сброс PIN к последним 4 цифрам номера — «водитель забыл PIN». */
   resetPin: (id: string) => send<{ driver: Driver }>(`/api/drivers/${id}`, 'PATCH', { resetPin: true }).then((r) => r.driver),

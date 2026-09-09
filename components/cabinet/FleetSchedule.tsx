@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { carLabel, driverName, formatDate, todayISO, uid, type ProtoAssignment } from '@/lib/proto-data';
+import { carLabel, driverName, formatDate, todayISO } from '@/lib/labels';
+import type { Assignment } from '@/lib/model';
 import { useStore } from './store';
 import { Icon } from './icons';
 import { ConfirmDialog, EmptyState, IconButton, Pill, SectionHeader, SelectField, Sheet } from './ui';
@@ -12,7 +13,7 @@ import { ConfirmDialog, EmptyState, IconButton, Pill, SectionHeader, SelectField
 export default function FleetSchedule() {
   const { assignments, drivers, cars, addAssignment, removeAssignment } = useStore();
   const [adding, setAdding] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState<ProtoAssignment | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Assignment | null>(null);
   const activeDrivers = drivers.filter((d) => d.role === 'driver' && d.active);
   const [form, setForm] = useState({
     date: todayISO(),
@@ -23,7 +24,7 @@ export default function FleetSchedule() {
   });
 
   const grouped = useMemo(() => {
-    const map = new Map<string, ProtoAssignment[]>();
+    const map = new Map<string, Assignment[]>();
     [...assignments]
       .sort((a, b) => (a.date === b.date ? a.timeStart.localeCompare(b.timeStart) : a.date < b.date ? -1 : 1))
       .forEach((a) => map.set(a.date, [...(map.get(a.date) ?? []), a]));
@@ -31,13 +32,13 @@ export default function FleetSchedule() {
   }, [assignments]);
 
   /** Одно авто на одну дату у двух водителей — вероятная ошибка планирования. */
-  function carConflict(a: ProtoAssignment): boolean {
+  function carConflict(a: Assignment): boolean {
     return assignments.some((x) => x.id !== a.id && x.date === a.date && x.carId === a.carId);
   }
 
   function save() {
     if (!form.driverId || !form.carId || !form.date) return;
-    addAssignment({ id: uid('g'), ...form });
+    void addAssignment({ ...form });
     setAdding(false);
   }
 

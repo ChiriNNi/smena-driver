@@ -216,9 +216,9 @@ export function Icon({ name, className, size = 20 }: { name: IconName; className
   );
 }
 
-// Секции чек-листа приходят из lib/checklist-data.ts с эмодзи в поле icon —
-// эти данные общие с legacy-приложением на "/", поэтому сами их не трогаем,
-// а в прототипе просто подбираем SVG-иконку по id секции/фазы.
+// Иконку подбираем по коду фазы и по slug раздела — постоянному коду из
+// начального набора (car_body_start и т.п.). У разделов, добавленных
+// администратором, slug пустой: там иконка по умолчанию.
 export function phaseIconName(phaseId: string): IconName {
   if (phaseId === 'start') return 'sunrise';
   if (phaseId === 'process') return 'zap';

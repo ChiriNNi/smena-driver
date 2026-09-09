@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { initials, type ProtoDriver } from '@/lib/proto-data';
+import { initials } from '@/lib/labels';
+import type { Driver } from '@/lib/model';
 import AdminShifts from './AdminShifts';
 import AdminDrivers from './AdminDrivers';
 import AdminFleet from './AdminFleet';
@@ -10,7 +11,7 @@ import BottomNav from './BottomNav';
 
 type Tab = 'shifts' | 'drivers' | 'fleet' | 'settings';
 
-export default function AdminApp({ admin, onLogout }: { admin: ProtoDriver; onLogout: () => void }) {
+export default function AdminApp({ admin, onLogout }: { admin: Driver; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('shifts');
 
   return (

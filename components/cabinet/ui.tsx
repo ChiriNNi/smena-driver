@@ -41,10 +41,13 @@ export function SelectField({
 
 /* ─── Блоки и заголовки ──────────────────────────────────────────────────── */
 
-export function SectionHeader({ title, action }: { title: string; action?: ReactNode }) {
+export function SectionHeader({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <h2 className="p-eyebrow">{title}</h2>
+      <div className="min-w-0">
+        <h2 className="p-eyebrow">{title}</h2>
+        {hint && <p className="mt-0.5 truncate text-[10px] text-[#9a9d96]">{hint}</p>}
+      </div>
       {action}
     </div>
   );

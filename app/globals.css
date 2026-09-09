@@ -1,15 +1,11 @@
 @import "tailwindcss";
 
-:root {
-  --gold: #c9a84c;
-}
-
 body {
-  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-family: var(--font-montserrat), system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
 ::-webkit-scrollbar { height: 6px; width: 6px; }
-::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: #d7dacf; border-radius: 4px; }
 
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
@@ -23,17 +19,18 @@ body {
 .pager > * { scroll-snap-align: start; }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 
-/* ── Прототип "Smena" — фирменный стиль IC Group (ic-group.kz) ───────────
+/* ── Фирменный стиль IC Group (ic-group.kz) ──────────────────────────────
    Montserrat, чёрный текст на белом, салатовый акцент, крупные скругления,
    плоские тонированные карточки, полностью круглые pill-кнопки.
-   Скопировано в отдельный неймспейс .proto, чтобы не задеть тёмную тему
-   старого приложения (App.tsx и остальные), которое ещё работает на /. */
-@keyframes proto-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+   Собрано в неймспейс .app: так у кабинета один общий набор классов, и его
+   стили не задевают служебные страницы (например, ошибки Next.js). */
+@keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+@keyframes fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 /* В своём @layer components, а не как обычные правила — иначе по каскаду
    слоёв CSS они будут перебивать модификаторы Tailwind вроде last:border-none. */
 @layer components {
-  .proto {
+  .app {
     --p-ink: #1a1d1e;
     --p-ink-soft: #5c6066;
     --p-ink-faint: #9a9d96;
@@ -41,56 +38,38 @@ body {
     --p-green-dark: #74ac30;
     --p-tint: #f5f6f1;
     --p-border: #e7e9e2;
-    font-family: 'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-family: var(--font-montserrat), system-ui, -apple-system, 'Segoe UI', sans-serif;
     background: #fff;
     color: var(--p-ink);
   }
-  .proto .p-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--p-ink-soft); }
-  .proto .p-card { border-radius: 28px; background: var(--p-tint); }
-  .proto .p-card-line { border-bottom: 1px solid var(--p-border); }
-  .proto .p-input {
+  .app .p-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--p-ink-soft); }
+  .app .p-card { border-radius: 28px; background: var(--p-tint); }
+  .app .p-card-line { border-bottom: 1px solid var(--p-border); }
+  .app .p-input {
     width: 100%; border-radius: 16px; border: 1.5px solid var(--p-border); background: #fff;
     /* 16px обязателен: при меньшем размере Safari на iPhone зумит страницу
        при фокусе на поле, и вёрстка «прыгает». */
     padding: 12px 16px; font-size: 16px; color: var(--p-ink); outline: none;
     transition: border-color 0.25s ease;
   }
-  .proto .p-input::placeholder { color: var(--p-ink-faint); }
-  .proto .p-input:focus { border-color: var(--p-green); }
-  .proto .p-btn {
+  .app .p-input::placeholder { color: var(--p-ink-faint); }
+  .app .p-input:focus { border-color: var(--p-green); }
+  .app .p-btn {
     border-radius: 999px; font-weight: 600; font-size: 14px; letter-spacing: 0.02em;
     transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .proto .p-btn:active { transform: scale(0.97); }
-  .proto .p-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-  .proto .p-btn-primary { background: var(--p-green); color: #fff; }
-  .proto .p-btn-primary:hover { background: var(--p-green-dark); }
-  .proto .p-btn-dark { background: var(--p-ink); color: #fff; }
-  .proto .p-btn-dark:hover { background: #000; }
-  .proto .p-btn-outline { background: #fff; color: var(--p-ink); border: 1.5px solid var(--p-border); }
-  .proto .p-btn-outline:hover { border-color: var(--p-ink-faint); }
-  .proto .p-key {
+  .app .p-btn:active { transform: scale(0.97); }
+  .app .p-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .app .p-btn-primary { background: var(--p-green); color: #fff; }
+  .app .p-btn-primary:hover { background: var(--p-green-dark); }
+  .app .p-btn-dark { background: var(--p-ink); color: #fff; }
+  .app .p-btn-dark:hover { background: #000; }
+  .app .p-btn-outline { background: #fff; color: var(--p-ink); border: 1.5px solid var(--p-border); }
+  .app .p-btn-outline:hover { border-color: var(--p-ink-faint); }
+  .app .p-key {
     border-radius: 20px; background: var(--p-tint); color: var(--p-ink);
     transition: all 0.2s ease;
   }
-  .proto .p-key:active { background: var(--p-border); transform: scale(0.95); }
-  .proto .p-fade-up { animation: proto-fade-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
-}
-
-@layer components {
-  .input {
-    @apply w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none transition focus:border-amber-500;
-  }
-  .label {
-    @apply mb-1 block text-xs text-neutral-500;
-  }
-  .btn-gold {
-    @apply rounded-lg bg-amber-500 py-2 text-sm font-medium text-neutral-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50;
-  }
-  .btn-outline {
-    @apply rounded-lg border border-neutral-700 py-2 text-sm text-neutral-300 transition hover:border-neutral-500 hover:text-neutral-100;
-  }
-  .card {
-    @apply rounded-xl border border-neutral-800 bg-neutral-900 shadow-sm;
-  }
+  .app .p-key:active { background: var(--p-border); transform: scale(0.95); }
+  .app .p-fade-up { animation: fade-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
 }

@@ -1,8 +1,5 @@
-import { redirect } from 'next/navigation';
+import AppRoot from '@/components/cabinet/AppRoot';
 
-// Кабинет живёт на /proto, пока идёт подключение к базе. После перевода
-// прототипа на реальные данные страница станет самим кабинетом, а этот
-// редирект уйдёт.
 export default function Page() {
-  redirect('/proto');
+  return <AppRoot />;
 }

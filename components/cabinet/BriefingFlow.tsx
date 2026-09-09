@@ -1,54 +1,78 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { formatDate, latestAck, todayISO, uid, type ProtoDriver } from '@/lib/proto-data';
+import { useEffect, useState } from 'react';
+import * as api from '@/lib/api';
+import { formatDate } from '@/lib/labels';
+import type { QuizQuestionPublic } from '@/lib/model';
+import { useSession } from './session';
 import { useStore } from './store';
 import { Icon } from './icons';
 import { EmptyState, Pill } from './ui';
 
 // Инструктаж по ТБ: правила → тест по одному вопросу → разбор результата.
-// Проверка ответов здесь клиентская, потому что это прототип. В проде вопросы
-// приходят без поля correct, а ответы проверяет сервер — иначе правильные
-// варианты видно в исходниках страницы.
+//
+// Ответы проверяет сервер: вопросы приходят без правильных вариантов, разбор
+// возвращается уже после отправки. Иначе тест проверял бы только умение
+// открыть инструменты разработчика.
 
 type Step = 'rules' | 'quiz' | 'result';
 
-export default function BriefingFlow({
-  driver,
-  onDone,
-  onExit,
-}: {
-  driver: ProtoDriver;
-  onDone: () => void;
-  onExit?: () => void;
-}) {
-  const { rules, quiz, acks, addAck } = useStore();
+export default function BriefingFlow({ onDone, onExit }: { onDone: () => void | Promise<void>; onExit?: () => void }) {
+  const { rules } = useStore();
+  const { briefing } = useSession();
+
   const [step, setStep] = useState<Step>('rules');
+  const [quiz, setQuiz] = useState<QuizQuestionPublic[] | null>(null);
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [result, setResult] = useState<api.AttemptResult | null>(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
-  const previous = latestAck(acks, driver.id);
-  const score = useMemo(() => quiz.filter((q) => answers[q.id] === q.correct).length, [quiz, answers]);
-  const allCorrect = quiz.length > 0 && score === quiz.length;
-  const current = quiz[index];
+  const previous = briefing?.latest ?? null;
+
+  useEffect(() => {
+    api.quiz
+      .list<QuizQuestionPublic>()
+      .then(setQuiz)
+      .catch(() => setError('Не удалось загрузить вопросы теста. Проверьте связь.'));
+  }, []);
 
   function startQuiz() {
     setAnswers({});
     setIndex(0);
+    setError('');
     setStep('quiz');
   }
 
-  function next() {
+  async function next() {
+    if (!quiz) return;
     if (index + 1 < quiz.length) {
       setIndex((i) => i + 1);
       return;
     }
-    // Записываем попытку с любым результатом — администратор видит актуальный.
-    addAck({ id: uid('ak'), driverId: driver.id, date: todayISO(), score, total: quiz.length });
-    setStep('result');
+
+    setSending(true);
+    setError('');
+    try {
+      setResult(await api.quiz.submit(answers));
+      setStep('result');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось отправить ответы.');
+    } finally {
+      setSending(false);
+    }
   }
 
-  /* ─── Тест не настроен ─────────────────────────────────────────────────── */
+  /* ─── Загрузка и пустой тест ───────────────────────────────────────────── */
+
+  if (quiz === null) {
+    return (
+      <div className="px-4 py-10 text-center text-sm text-[#9a9d96]">
+        {error || 'Загружаем инструктаж…'}
+      </div>
+    );
+  }
 
   if (quiz.length === 0) {
     return (
@@ -58,7 +82,7 @@ export default function BriefingFlow({
           title="Тест по ТБ не настроен"
           hint="Администратор ещё не добавил вопросы. Можно приступать к смене."
         />
-        <button onClick={onDone} className="p-btn p-btn-primary py-3.5">
+        <button onClick={() => void onDone()} className="p-btn p-btn-primary py-3.5">
           Приступить к смене
         </button>
       </div>
@@ -86,7 +110,7 @@ export default function BriefingFlow({
             <Icon name="clock" size={15} className="shrink-0 text-[#9a9d96]" />
             <p className="min-w-0 flex-1 text-xs leading-relaxed text-[#5c6066]">
               Прошлая попытка: {previous.score}/{previous.total} от {formatDate(previous.date)}.{' '}
-              {previous.score < previous.total ? 'Были ошибки — нужно пройти заново.' : 'Срок действия истёк.'}
+              {previous.passed ? 'Срок действия истёк.' : 'Были ошибки — нужно пройти заново.'}
             </p>
           </div>
         )}
@@ -122,7 +146,9 @@ export default function BriefingFlow({
   /* ─── Шаг 2. Вопросы ───────────────────────────────────────────────────── */
 
   if (step === 'quiz') {
+    const current = quiz[index];
     const answered = answers[current.id] !== undefined;
+
     return (
       <div className="flex flex-col gap-4 px-4 py-6">
         <div>
@@ -174,6 +200,8 @@ export default function BriefingFlow({
           </div>
         </div>
 
+        {error && <p className="text-center text-sm font-medium text-[#c0564a]">{error}</p>}
+
         <div className="flex gap-2">
           {index > 0 && (
             <button onClick={() => setIndex((i) => i - 1)} className="p-btn p-btn-outline flex-1 py-3.5 text-xs">
@@ -181,12 +209,12 @@ export default function BriefingFlow({
             </button>
           )}
           <button
-            onClick={next}
-            disabled={!answered}
+            onClick={() => void next()}
+            disabled={!answered || sending}
             className="p-btn p-btn-primary flex flex-[2] items-center justify-center gap-1.5 py-3.5"
           >
-            {index + 1 === quiz.length ? 'Завершить тест' : 'Далее'}
-            <Icon name="arrow-right" size={15} />
+            {sending ? 'Проверяем…' : index + 1 === quiz.length ? 'Завершить тест' : 'Далее'}
+            {!sending && <Icon name="arrow-right" size={15} />}
           </button>
         </div>
       </div>
@@ -195,32 +223,36 @@ export default function BriefingFlow({
 
   /* ─── Шаг 3. Результат ─────────────────────────────────────────────────── */
 
+  if (!result) return null;
+  const passed = result.passed;
+
   return (
     <div className="flex flex-col gap-4 px-4 py-6">
       <div className="p-fade-up mx-auto max-w-xs text-center">
         <div
           className={
             'mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full ' +
-            (allCorrect ? 'bg-[#8fc640]/15 text-[#5e9128]' : 'bg-[#b5811c]/12 text-[#96690f]')
+            (passed ? 'bg-[#8fc640]/15 text-[#5e9128]' : 'bg-[#b5811c]/12 text-[#96690f]')
           }
         >
-          <Icon name={allCorrect ? 'check-circle' : 'warning'} size={26} />
+          <Icon name={passed ? 'check-circle' : 'warning'} size={26} />
         </div>
-        <h2 className="text-lg font-bold">{allCorrect ? 'Инструктаж пройден' : 'Есть ошибки'}</h2>
+        <h2 className="text-lg font-bold">{passed ? 'Инструктаж пройден' : 'Есть ошибки'}</h2>
         <p className="mt-1.5 text-sm leading-relaxed text-[#5c6066]">
-          {score} из {quiz.length} верно.{' '}
-          {allCorrect ? 'Допуск к смене открыт на 30 дней.' : 'Разберите ошибки и пройдите тест заново.'}
+          {result.score} из {result.total} верно.{' '}
+          {passed
+            ? `Допуск к смене открыт на ${result.status.validDays} дней.`
+            : 'Разберите ошибки и пройдите тест заново.'}
         </p>
       </div>
 
       <div className="p-card p-4">
         <p className="p-eyebrow mb-2">Разбор ответов</p>
         <div className="flex flex-col">
-          {quiz.map((q, i) => {
-            const given = answers[q.id];
-            const correct = given === q.correct;
+          {result.review.map((r, i) => {
+            const correct = r.given === r.correct;
             return (
-              <div key={q.id} className="p-card-line py-2.5 last:border-none">
+              <div key={r.id} className="p-card-line py-2.5 last:border-none">
                 <div className="flex items-start gap-2">
                   <Icon
                     name={correct ? 'check' : 'x'}
@@ -229,12 +261,12 @@ export default function BriefingFlow({
                   />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">
-                      {i + 1}. {q.question}
+                      {i + 1}. {r.question}
                     </p>
                     {!correct && (
                       <div className="mt-1 flex flex-col gap-0.5 text-xs">
-                        <p className="text-[#c0564a]">Ваш ответ: {q.options[given] ?? '—'}</p>
-                        <p className="text-[#5e9128]">Верно: {q.options[q.correct]}</p>
+                        <p className="text-[#c0564a]">Ваш ответ: {r.given === null ? '—' : r.options[r.given]}</p>
+                        <p className="text-[#5e9128]">Верно: {r.options[r.correct]}</p>
                       </div>
                     )}
                   </div>
@@ -245,8 +277,8 @@ export default function BriefingFlow({
         </div>
       </div>
 
-      {allCorrect ? (
-        <button onClick={onDone} className="p-btn p-btn-primary flex items-center justify-center gap-1.5 py-3.5">
+      {passed ? (
+        <button onClick={() => void onDone()} className="p-btn p-btn-primary flex items-center justify-center gap-1.5 py-3.5">
           Приступить к смене
           <Icon name="arrow-right" size={15} />
         </button>
@@ -262,8 +294,9 @@ export default function BriefingFlow({
       )}
 
       <div className="flex justify-center">
-        <Pill tone={allCorrect ? 'good' : 'warn'}>
-          Результат записан: {score}/{quiz.length} · {formatDate(todayISO())}
+        <Pill tone={passed ? 'good' : 'warn'}>
+          Результат записан: {result.score}/{result.total}
+          {result.status.latest ? ` · ${formatDate(result.status.latest.date)}` : ''}
         </Pill>
       </div>
     </div>

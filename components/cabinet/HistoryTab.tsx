@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { carLabel, formatDate, money, type ProtoDriver, type ProtoShift } from '@/lib/proto-data';
+import { carLabel, formatDate, money } from '@/lib/labels';
+import type { Driver, Shift } from '@/lib/model';
 import { useStore } from './store';
 import { Icon } from './icons';
 import ShiftReportModal from './ShiftReportModal';
@@ -9,9 +10,9 @@ import { EmptyState, Pill, SectionHeader, StatTile } from './ui';
 
 // История смен водителя: только его собственные смены, отчёт открывается по клику.
 
-export default function HistoryTab({ driver }: { driver: ProtoDriver }) {
+export default function HistoryTab({ driver }: { driver: Driver }) {
   const { shifts, cars } = useStore();
-  const [selected, setSelected] = useState<ProtoShift | null>(null);
+  const [selected, setSelected] = useState<Shift | null>(null);
 
   const own = useMemo(
     () => shifts.filter((s) => s.driverId === driver.id).sort((a, b) => (a.date < b.date ? 1 : -1)),

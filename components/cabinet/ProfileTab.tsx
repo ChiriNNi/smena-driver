@@ -1,11 +1,13 @@
 'use client';
 
-import { BRIEFING_VALID_DAYS, carLabel, formatDate, initials, isBriefingValid, latestAck, type ProtoDriver } from '@/lib/proto-data';
+import { carLabel, formatDate, initials } from '@/lib/labels';
+import type { Driver } from '@/lib/model';
+import { useSession } from './session';
 import { useStore } from './store';
 import { Icon } from './icons';
 import { CardTitle, Pill, SectionHeader } from './ui';
 
-// Профиль водителя: свои данные, правила ТБ и статус ознакомления, выход.
+// Профиль водителя: свои данные, состояние допуска по ТБ, правила, выход.
 
 export default function ProfileTab({
   driver,
@@ -13,14 +15,17 @@ export default function ProfileTab({
   onSendWhatsApp,
   onRetakeBriefing,
 }: {
-  driver: ProtoDriver;
+  driver: Driver;
   onLogout: () => void;
   onSendWhatsApp: () => void;
   onRetakeBriefing: () => void;
 }) {
-  const { cars, rules, acks } = useStore();
-  const ack = latestAck(acks, driver.id);
-  const briefingValid = isBriefingValid(acks, driver.id);
+  const { cars, rules } = useStore();
+  const { briefing, settings } = useSession();
+
+  const ack = briefing?.latest ?? null;
+  const briefingValid = briefing?.valid ?? false;
+  const validDays = briefing?.validDays ?? settings?.briefingValidDays ?? 30;
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4">
@@ -44,7 +49,7 @@ export default function ProfileTab({
           <div className="flex items-center justify-between gap-3">
             <span className="text-[#9a9d96]">Инструктаж по ТБ</span>
             {ack ? (
-              <Pill tone={ack.score === ack.total ? 'good' : 'warn'}>
+              <Pill tone={briefingValid ? 'good' : 'warn'}>
                 {ack.score}/{ack.total} · {formatDate(ack.date)}
               </Pill>
             ) : (
@@ -63,7 +68,9 @@ export default function ProfileTab({
         <CardTitle icon="shield" title="Инструктаж по ТБ" />
         <p className="text-xs leading-relaxed text-[#5c6066]">
           {briefingValid
-            ? `Тест сдан ${ack ? formatDate(ack.date) : ''} без ошибок. Допуск действует ${BRIEFING_VALID_DAYS} дней с этой даты.`
+            ? `Тест сдан ${ack ? formatDate(ack.date) : ''} без ошибок. Допуск действует до ${
+                briefing?.validUntil ? formatDate(briefing.validUntil) : '—'
+              }.`
             : ack
               ? `Последняя попытка: ${ack.score}/${ack.total} от ${formatDate(ack.date)}. Нужно пройти заново — без этого смена не начнётся.`
               : 'Тест ещё не пройден — без него смена не начнётся.'}
@@ -96,13 +103,15 @@ export default function ProfileTab({
       )}
 
       <div className="rounded-2xl border border-dashed border-[#e7e9e2] bg-[#f5f6f1] p-3.5 text-xs leading-relaxed text-[#5c6066]">
-        Сессия действует 30 дней и продлевается при каждом заходе — PIN не спросит заново, пока вы пользуетесь кабинетом
-        хотя бы раз в этот срок.
+        Вход действует 30 дней и продлевается при каждом заходе — PIN не спросит заново, пока вы пользуетесь кабинетом
+        хотя бы раз в этот срок. Если PIN забыт, администратор сбросит его к последним 4 цифрам вашего номера.
       </div>
 
       <button onClick={onLogout} className="p-btn p-btn-outline py-3">
         Выйти
       </button>
+
+      <p className="pb-2 text-center text-[10px] text-[#9a9d96]">Допуск по ТБ действует {validDays} дней после сдачи теста</p>
     </div>
   );
 }

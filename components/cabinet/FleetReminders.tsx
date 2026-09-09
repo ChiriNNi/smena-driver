@@ -1,16 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import {
-  carLabel,
-  daysUntil,
-  formatDate,
-  REMINDER_KINDS,
-  todayISO,
-  uid,
-  type ProtoReminder,
-  type ReminderKind,
-} from '@/lib/proto-data';
+import { carLabel, daysUntil, formatDate, todayISO } from '@/lib/labels';
+import { REMINDER_KINDS, type Reminder } from '@/lib/model';
+
+type ReminderKind = (typeof REMINDER_KINDS)[number];
 import { useStore } from './store';
 import { Icon } from './icons';
 import { ConfirmDialog, EmptyState, Field, IconButton, Pill, SectionHeader, SelectField, Sheet } from './ui';
@@ -27,8 +21,8 @@ function statusOf(days: number): { tone: 'bad' | 'warn' | 'good'; label: string 
 
 export default function FleetReminders() {
   const { reminders, cars, addReminder, updateReminder, removeReminder } = useStore();
-  const [editing, setEditing] = useState<ProtoReminder | 'new' | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<ProtoReminder | null>(null);
+  const [editing, setEditing] = useState<Reminder | 'new' | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Reminder | null>(null);
   const [form, setForm] = useState({
     carId: cars[0]?.id ?? '',
     kind: REMINDER_KINDS[0] as ReminderKind,
@@ -48,17 +42,21 @@ export default function FleetReminders() {
     setEditing('new');
   }
 
-  function openEdit(r: ProtoReminder) {
-    setForm({ carId: r.carId, kind: r.kind, dueDate: r.dueDate, note: r.note });
+  function openEdit(r: Reminder) {
+    // В базе kind — просто текст: администратор мог задать свой вид срока
+    // раньше, поэтому приводим к известному списку, а незнакомое значение
+    // показываем как «Прочее» из первого пункта.
+    const kind = (REMINDER_KINDS as readonly string[]).includes(r.kind) ? (r.kind as ReminderKind) : REMINDER_KINDS[0];
+    setForm({ carId: r.carId, kind, dueDate: r.dueDate, note: r.note });
     setEditing(r);
   }
 
   function save() {
     if (!form.carId || !form.dueDate) return;
     if (editing === 'new') {
-      addReminder({ id: uid('r'), carId: form.carId, kind: form.kind, dueDate: form.dueDate, note: form.note.trim() });
+      void addReminder({ carId: form.carId, kind: form.kind, dueDate: form.dueDate, note: form.note.trim() });
     } else if (editing) {
-      updateReminder(editing.id, { carId: form.carId, kind: form.kind, dueDate: form.dueDate, note: form.note.trim() });
+      void updateReminder(editing.id, { carId: form.carId, kind: form.kind, dueDate: form.dueDate, note: form.note.trim() });
     }
     setEditing(null);
   }

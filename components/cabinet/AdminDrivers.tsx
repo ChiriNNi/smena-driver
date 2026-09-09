@@ -1,18 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import {
-  carLabel,
-  formatDate,
-  initials,
-  onlyDigits,
-  pinFromPhone,
-  formatPhoneInput,
-  todayISO,
-  uid,
-  type ProtoDriver,
-  type Role,
-} from '@/lib/proto-data';
+import { carLabel, formatDate, formatPhoneInput, initials, onlyDigits, pinFromPhone, todayISO } from '@/lib/labels';
+import type { Driver, Role } from '@/lib/model';
 import { useStore } from './store';
 import { Icon } from './icons';
 import { ConfirmDialog, EmptyState, Field, IconButton, Pill, SectionHeader, SelectField, Sheet, StatTile } from './ui';
@@ -22,9 +12,9 @@ import { ConfirmDialog, EmptyState, Field, IconButton, Pill, SectionHeader, Sele
 
 export default function AdminDrivers() {
   const { drivers, cars, shifts, acks, addDriver, updateDriver, removeDriver } = useStore();
-  const [editing, setEditing] = useState<ProtoDriver | 'new' | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<ProtoDriver | null>(null);
-  const [confirmReset, setConfirmReset] = useState<ProtoDriver | null>(null);
+  const [editing, setEditing] = useState<Driver | 'new' | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Driver | null>(null);
+  const [confirmReset, setConfirmReset] = useState<Driver | null>(null);
   const [createdPin, setCreatedPin] = useState<{ name: string; pin: string } | null>(null);
 
   const emptyForm = { lastName: '', firstName: '', phone: '', carId: cars[0]?.id ?? '', role: 'driver' as Role };
@@ -52,7 +42,7 @@ export default function AdminDrivers() {
     setEditing('new');
   }
 
-  function openEdit(d: ProtoDriver) {
+  function openEdit(d: Driver) {
     setForm({ lastName: d.lastName, firstName: d.firstName, phone: d.phone, carId: d.carId, role: d.role });
     setEditing(d);
   }
@@ -67,13 +57,14 @@ export default function AdminDrivers() {
       role: form.role,
     };
     if (editing === 'new') {
-      const pin = pinFromPhone(form.phone);
-      addDriver({ id: uid('d'), ...base, pin, active: true, hiredAt: todayISO() });
-      setCreatedPin({ name: `${base.lastName} ${base.firstName}`, pin });
+      // PIN задаёт сервер (последние 4 цифры номера) и хранит только его хэш —
+      // здесь он нужен лишь для того, чтобы показать администратору.
+      void addDriver({ ...base, hiredAt: todayISO() });
+      setCreatedPin({ name: `${base.lastName} ${base.firstName}`, pin: pinFromPhone(form.phone) });
     } else if (editing) {
-      // Номер поменялся — PIN по умолчанию тоже пересчитываем.
-      const pinPatch = onlyDigits(form.phone) !== onlyDigits(editing.phone) ? { pin: pinFromPhone(form.phone) } : {};
-      updateDriver(editing.id, { ...base, ...pinPatch });
+      // Номер поменялся — PIN по умолчанию пересчитывает сервер.
+      const resetPin = onlyDigits(form.phone) !== onlyDigits(editing.phoneDigits);
+      void updateDriver(editing.id, resetPin ? { ...base, resetPin: true } : base);
     }
     setEditing(null);
   }
@@ -159,7 +150,7 @@ export default function AdminDrivers() {
                   <IconButton
                     icon="power"
                     label={d.active ? 'Отключить доступ' : 'Включить доступ'}
-                    onClick={() => updateDriver(d.id, { active: !d.active })}
+                    onClick={() => void updateDriver(d.id, { active: !d.active })}
                   />
                   <span className="ml-auto" />
                   <IconButton icon="trash" label="Удалить" tone="danger" disabled={locked} onClick={() => setConfirmDelete(d)} />
@@ -240,7 +231,7 @@ export default function AdminDrivers() {
           confirmLabel="Сбросить"
           onCancel={() => setConfirmReset(null)}
           onConfirm={() => {
-            updateDriver(confirmReset.id, { pin: pinFromPhone(confirmReset.phone) });
+            void updateDriver(confirmReset.id, { resetPin: true });
             setConfirmReset(null);
           }}
         />
@@ -252,7 +243,7 @@ export default function AdminDrivers() {
           message={`${confirmDelete.lastName} ${confirmDelete.firstName} потеряет доступ к кабинету. Действие необратимо.`}
           onCancel={() => setConfirmDelete(null)}
           onConfirm={() => {
-            removeDriver(confirmDelete.id);
+            void removeDriver(confirmDelete.id);
             setConfirmDelete(null);
           }}
         />

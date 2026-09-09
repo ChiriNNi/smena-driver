@@ -2,6 +2,8 @@ import { query, withTransaction } from './db';
 import { ApiError } from './api-helpers';
 import { PHASE_TITLE, type PhaseId, type TemplatePhase, type TemplateSection } from './model';
 
+export { countTemplateItems } from './model';
+
 // Шаблон чек-листа: чтение для водителя и полная перезапись из редактора
 // администратора.
 //
@@ -51,10 +53,6 @@ export async function getTemplate(): Promise<TemplatePhase[]> {
         items: (bySection.get(s.id) ?? []).map((i) => (i.qty ? { id: i.id, text: i.text, qty: i.qty } : { id: i.id, text: i.text })),
       })),
   }));
-}
-
-export function countTemplateItems(template: TemplatePhase[]): number {
-  return template.reduce((sum, ph) => sum + ph.sections.reduce((s, sec) => s + sec.items.length, 0), 0);
 }
 
 /* ─── Сохранение из редактора ────────────────────────────────────────────── */

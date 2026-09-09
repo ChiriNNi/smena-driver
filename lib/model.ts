@@ -87,6 +87,10 @@ export type TemplateItem = { id: string; text: string; qty?: string };
 export type TemplateSection = { id: string; title: string; slug: string; notable: boolean; items: TemplateItem[] };
 export type TemplatePhase = { id: PhaseId; phase: string; sections: TemplateSection[] };
 
+export function countTemplateItems(template: TemplatePhase[]): number {
+  return template.reduce((sum, ph) => sum + ph.sections.reduce((s, sec) => s + sec.items.length, 0), 0);
+}
+
 /* ─── Смены ──────────────────────────────────────────────────────────────── */
 
 export type ShiftRemark = { text: string; comment: string; photos: number };

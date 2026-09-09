@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { formatDate, initials, uid, type QuizQuestion } from '@/lib/proto-data';
+import { formatDate, initials } from '@/lib/labels';
+import type { QuizQuestionAdmin } from '@/lib/model';
 import { useStore } from './store';
 import { Icon } from './icons';
 import { ConfirmDialog, EmptyState, Field, IconButton, Pill, SectionHeader, Sheet, StatTile } from './ui';
@@ -14,8 +15,8 @@ const EMPTY = { question: '', options: ['', '', ''], correct: 0 };
 
 export default function AdminQuiz() {
   const { quiz, acks, drivers, addQuestion, updateQuestion, removeQuestion } = useStore();
-  const [editing, setEditing] = useState<QuizQuestion | 'new' | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<QuizQuestion | null>(null);
+  const [editing, setEditing] = useState<QuizQuestionAdmin | 'new' | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<QuizQuestionAdmin | null>(null);
   const [form, setForm] = useState<{ question: string; options: string[]; correct: number }>(EMPTY);
 
   const activeDrivers = drivers.filter((d) => d.role === 'driver');
@@ -26,7 +27,7 @@ export default function AdminQuiz() {
     setEditing('new');
   }
 
-  function openEdit(q: QuizQuestion) {
+  function openEdit(q: QuizQuestionAdmin) {
     setForm({ question: q.question, options: [...q.options], correct: q.correct });
     setEditing(q);
   }
@@ -41,9 +42,9 @@ export default function AdminQuiz() {
     const options = form.options.map((o) => o.trim()).filter(Boolean);
     const correct = Math.max(0, options.indexOf(correctText.trim()));
     if (editing === 'new') {
-      addQuestion({ id: uid('q'), question: form.question.trim(), options, correct });
+      void addQuestion({ question: form.question.trim(), options, correct });
     } else if (editing) {
-      updateQuestion(editing.id, { question: form.question.trim(), options, correct });
+      void updateQuestion(editing.id, { question: form.question.trim(), options, correct });
     }
     setEditing(null);
   }

@@ -1,16 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import {
-  carLabel,
-  downloadFile,
-  driverName,
-  formatDate,
-  money,
-  shiftsToCsv,
-  todayISO,
-  type ProtoShift,
-} from '@/lib/proto-data';
+import * as api from '@/lib/api';
+import { carLabel, driverName, formatDate, money } from '@/lib/labels';
+import type { Shift } from '@/lib/model';
 import { useStore } from './store';
 import { Icon } from './icons';
 import ShiftReportModal from './ShiftReportModal';
@@ -24,7 +17,7 @@ export default function AdminShifts() {
   const [carId, setCarId] = useState('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const [openShift, setOpenShift] = useState<ProtoShift | null>(null);
+  const [openShift, setOpenShift] = useState<Shift | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const filtered = useMemo(() => {
@@ -57,8 +50,17 @@ export default function AdminShifts() {
     setTo('');
   }
 
-  function exportCsv() {
-    downloadFile(`smena-shifts-${todayISO()}.csv`, shiftsToCsv(filtered, drivers, cars));
+  /**
+   * Файл собирает сервер: в него попадают те же фильтры, что на экране,
+   * а выгрузка не ограничена уже загруженной страницей истории.
+   */
+  function exportUrl(format: 'csv' | 'xlsx') {
+    return api.shifts.exportUrl(format, {
+      driverId: driverId === 'all' ? undefined : driverId,
+      carId: carId === 'all' ? undefined : carId,
+      from: from || undefined,
+      to: to || undefined,
+    });
   }
 
   return (
@@ -93,14 +95,22 @@ export default function AdminShifts() {
           <Icon name="settings" size={14} />
           {filtersActive ? 'Фильтры активны' : 'Фильтры'}
         </button>
-        <button
-          onClick={exportCsv}
-          disabled={filtered.length === 0}
+        {/* Обычные ссылки, а не fetch: файл отдаёт сервер, и браузер сам
+            запускает скачивание — так работает и на телефоне. */}
+        <a
+          href={exportUrl('csv')}
           className="p-btn p-btn-dark flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs"
         >
           <Icon name="download" size={14} />
-          Экспорт CSV
-        </button>
+          CSV
+        </a>
+        <a
+          href={exportUrl('xlsx')}
+          className="p-btn p-btn-outline flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs"
+        >
+          <Icon name="download" size={14} />
+          Excel
+        </a>
       </div>
 
       {filtersOpen && (
