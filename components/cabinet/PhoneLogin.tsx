@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatPhoneInput, onlyDigits } from '@/lib/labels';
 import { useSession } from './session';
 import { Icon } from './icons';
@@ -23,9 +23,16 @@ export default function PhoneLogin() {
   const [error, setError] = useState('');
   const [shake, setShake] = useState(false);
   const [busy, setBusy] = useState(false);
+  const pinInputRef = useRef<HTMLInputElement>(null);
 
   const phoneDigits = onlyDigits(phone);
   const phoneReady = phoneDigits.length === 11;
+
+  // На компьютере курсор сразу в поле PIN — вводить можно, не касаясь мыши.
+  // На телефоне поле скрыто через CSS, и focus() там ничего не делает.
+  useEffect(() => {
+    if (step === 'pin') pinInputRef.current?.focus();
+  }, [step]);
 
   function goToPin() {
     if (!phoneReady) return;
@@ -38,6 +45,15 @@ export default function PhoneLogin() {
     setStep('phone');
     setPin('');
     setError('');
+  }
+
+  /** Ввод с физической клавиатуры: только цифры, четвёртая отправляет форму. */
+  function onTyped(raw: string) {
+    if (busy) return;
+    const digits = raw.replace(/\D/g, '').slice(0, 4);
+    setError('');
+    setPin(digits);
+    if (digits.length === 4) void submit(digits);
   }
 
   function pressKey(k: string) {
@@ -137,7 +153,7 @@ export default function PhoneLogin() {
                 Изменить номер
               </button>
 
-              <div className={'mt-7 flex justify-center gap-4 ' + (shake ? 'animate-[shake_0.4s]' : '')}>
+              <div className={'pin-touch mt-7 flex justify-center gap-4 ' + (shake ? 'animate-[shake_0.4s]' : '')}>
                 {[0, 1, 2, 3].map((i) => (
                   <div
                     key={i}
@@ -149,6 +165,23 @@ export default function PhoneLogin() {
                 ))}
               </div>
 
+              <div className={'pin-typed mt-6 w-full max-w-[220px] ' + (shake ? 'animate-[shake_0.4s]' : '')}>
+                <input
+                  ref={pinInputRef}
+                  type="password"
+                  inputMode="numeric"
+                  // one-time-code, а не current-password: браузер не должен
+                  // предлагать сохранить четырёхзначный PIN как пароль сайта.
+                  autoComplete="one-time-code"
+                  maxLength={4}
+                  disabled={busy}
+                  value={pin}
+                  onChange={(e) => onTyped(e.target.value)}
+                  placeholder="••••"
+                  className="p-input text-center text-2xl tracking-[0.6em] disabled:opacity-60"
+                />
+              </div>
+
               {/* Место под сообщение об ошибке занято всегда — иначе клавиатура
                   подпрыгивает, когда PIN не подошёл. */}
               <p className="mt-4 min-h-[2.5rem] px-2 text-center text-sm font-medium leading-snug text-[#d9534f]">
@@ -156,7 +189,12 @@ export default function PhoneLogin() {
               </p>
             </div>
 
-            <div className={'grid grid-cols-3 gap-2.5 transition-opacity ' + (busy ? 'pointer-events-none opacity-50' : '')}>
+            <div
+              className={
+                'pin-touch grid grid-cols-3 gap-2.5 transition-opacity ' +
+                (busy ? 'pointer-events-none opacity-50' : '')
+              }
+            >
               {KEYS.map((k, i) => (
                 <button
                   key={i}

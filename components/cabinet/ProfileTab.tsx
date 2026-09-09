@@ -21,11 +21,10 @@ export default function ProfileTab({
   onRetakeBriefing: () => void;
 }) {
   const { cars, rules } = useStore();
-  const { briefing, settings } = useSession();
+  const { briefing } = useSession();
 
   const ack = briefing?.latest ?? null;
   const briefingValid = briefing?.valid ?? false;
-  const validDays = briefing?.validDays ?? settings?.briefingValidDays ?? 30;
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4">
@@ -102,16 +101,10 @@ export default function ProfileTab({
         </>
       )}
 
-      <div className="rounded-2xl border border-dashed border-[#e7e9e2] bg-[#f5f6f1] p-3.5 text-xs leading-relaxed text-[#5c6066]">
-        Вход действует 30 дней и продлевается при каждом заходе — PIN не спросит заново, пока вы пользуетесь кабинетом
-        хотя бы раз в этот срок. Если PIN забыт, администратор сбросит его к последним 4 цифрам вашего номера.
-      </div>
-
       <button onClick={onLogout} className="p-btn p-btn-outline py-3">
         Выйти
       </button>
 
-      <p className="pb-2 text-center text-[10px] text-[#9a9d96]">Допуск по ТБ действует {validDays} дней после сдачи теста</p>
     </div>
   );
 }
