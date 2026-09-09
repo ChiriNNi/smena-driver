@@ -69,19 +69,41 @@ function readExisting() {
   return values;
 }
 
+const PASSWORD_PLACEHOLDER = /\[YOUR-PASSWORD\]|\[PASSWORD\]|<password>/i;
+
+/**
+ * Supabase выдаёт строку подключения с заглушкой вместо пароля. Вклеивать
+ * пароль в середину строки руками неудобно и легко испортить, поэтому
+ * спрашиваем его отдельно и подставляем сами.
+ */
+async function fillPassword(url) {
+  if (!PASSWORD_PLACEHOLDER.test(url)) return url;
+
+  console.log('  В строке заглушка вместо пароля — введите пароль базы отдельно.');
+  console.log('  Если пароль неизвестен: Supabase → Settings → Database → Reset database password.');
+
+  for (;;) {
+    const password = await ask('  Пароль базы: ', { hidden: true });
+    if (!password) {
+      console.log('  Пароль обязателен.');
+      continue;
+    }
+    // Пароли Supabase содержат символы, которые в адресе значат другое
+    // (@ / : ? #), поэтому кодируем — иначе строка подключения разъедется.
+    return url.replace(PASSWORD_PLACEHOLDER, encodeURIComponent(password));
+  }
+}
+
 const FIELDS = [
   {
     key: 'DATABASE_URL',
     title: 'Строка подключения к базе',
     hint: 'Supabase → Connect → Direct → Transaction pooler (порт 6543)',
     hidden: true,
+    prepare: fillPassword,
     check(value) {
       if (!/^postgres(ql)?:\/\//.test(value)) return 'Должна начинаться с postgres:// или postgresql://';
-      // Supabase копирует строку с заглушкой вместо пароля — самая частая
-      // причина ошибки аутентификации на первом же запуске.
-      if (/\[YOUR-PASSWORD\]|<password>/i.test(value)) {
-        return 'В строке осталась заглушка [YOUR-PASSWORD] — подставьте пароль базы';
-      }
+      if (PASSWORD_PLACEHOLDER.test(value)) return 'Пароль так и не подставлен.';
       return null;
     },
   },
@@ -124,13 +146,15 @@ for (const field of FIELDS) {
       continue;
     }
 
-    const error = field.check(answer);
+    const prepared = field.prepare ? await field.prepare(answer) : answer;
+
+    const error = field.check(prepared);
     if (error) {
       console.log(`  ${error}\n`);
       continue;
     }
 
-    values.set(field.key, answer);
+    values.set(field.key, prepared);
     break;
   }
   console.log('');
