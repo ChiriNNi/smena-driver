@@ -8,6 +8,16 @@ types.setTypeParser(1082, (val) => val);
 
 // Единый пул подключений к Postgres (Neon / Vercel Postgres).
 // DATABASE_URL задаётся в .env.local (локально) и в переменных окружения проекта на Vercel.
+/**
+ * Нужен ли TLS. Supabase и другие облачные базы принимают только защищённые
+ * соединения, а локальная база в контейнере обычно поднята без TLS — попытка
+ * подключиться к ней по SSL падает с «server does not support SSL».
+ */
+export function needsSsl(connectionString: string): boolean {
+  if (/sslmode=disable/.test(connectionString)) return false;
+  return !/@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(connectionString);
+}
+
 let pool: Pool | undefined;
 
 function getPool(): Pool {
@@ -20,7 +30,7 @@ function getPool(): Pool {
     }
     pool = new Pool({
       connectionString,
-      ssl: connectionString.includes('sslmode=disable') ? false : { rejectUnauthorized: false },
+      ssl: needsSsl(connectionString) ? { rejectUnauthorized: false } : false,
       max: 5,
     });
   }

@@ -76,9 +76,10 @@ export default function AdminChecklistEditor() {
     if (editing === 'new-section') {
       update((draft) =>
         draft[phaseIdx].sections.push({
+          // Иконка подбирается по id в sectionIconName(); у своих разделов
+          // код неизвестный, поэтому там будет иконка по умолчанию.
           id: `custom_${uid('s')}`,
           title: form.title.trim(),
-          icon: '', // иконка подбирается по id в sectionIconName()
           notable: form.notable,
           items: [],
         })

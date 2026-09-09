@@ -1,34 +1,52 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { jsonError, requireAdmin } from '@/lib/api-helpers';
+import { hashPin } from '@/lib/auth';
+import { ApiError, dateISO, ok, readBody, str, todayISO, uuid, withAdmin, withUser } from '@/lib/api-helpers';
+import { toDriver, type DriverRow } from '@/lib/model';
+import { isValidPin, normalizePhone, pinFromPhone } from '@/lib/phone';
 
 export const dynamic = 'force-dynamic';
 
-type DriverRow = { id: string; name: string; created_at: string };
+const FIELDS = 'id, last_name, first_name, phone_digits, role, active, car_id, hired_at::text AS hired_at';
+
+// Профили водителей и администраторов. Регистрирует только администратор —
+// самостоятельной регистрации в системе нет (согласовано в спецификации).
 
 export async function GET() {
-  const rows = await query<DriverRow>('SELECT id, name, created_at FROM drivers ORDER BY name ASC');
-  return NextResponse.json({ drivers: rows });
+  return withUser(async (user) => {
+    // Водителю список коллег не нужен и не положен — он получает только себя.
+    if (user.role !== 'admin') return ok({ drivers: [user] });
+
+    const rows = await query<DriverRow>(`SELECT ${FIELDS} FROM drivers ORDER BY active DESC, last_name, first_name`);
+    return ok({ drivers: rows.map(toDriver) });
+  });
 }
 
 export async function POST(req: NextRequest) {
-  const forbidden = await requireAdmin();
-  if (forbidden) return forbidden;
-  const body = await req.json().catch(() => null);
-  const name = String(body?.name || '').trim();
-  if (!name) return jsonError('Укажите ФИО водителя.');
-  const row = await queryOne<DriverRow>(
-    'INSERT INTO drivers (name) VALUES ($1) RETURNING id, name, created_at',
-    [name]
-  );
-  return NextResponse.json({ driver: row });
-}
+  return withAdmin(async () => {
+    const body = await readBody(req);
+    const lastName = str(body, 'lastName', { required: true, max: 80 });
+    const firstName = str(body, 'firstName', { required: true, max: 80 });
+    const phone = normalizePhone(str(body, 'phone', { required: true }));
+    if (!phone) throw new ApiError('Номер телефона должен быть казахстанским мобильным: +7 7XX XXX XX XX.');
 
-export async function DELETE(req: NextRequest) {
-  const forbidden = await requireAdmin();
-  if (forbidden) return forbidden;
-  const id = req.nextUrl.searchParams.get('id');
-  if (!id) return jsonError('Не указан id.');
-  await query('DELETE FROM drivers WHERE id = $1', [id]);
-  return NextResponse.json({ ok: true });
+    const role = str(body, 'role') === 'admin' ? 'admin' : 'driver';
+    const carId = uuid(str(body, 'carId') || null, 'автомобиль');
+    const hiredAt = dateISO(body, 'hiredAt') || todayISO();
+
+    // PIN по умолчанию — последние 4 цифры номера. Администратор может задать
+    // свой, но хранится всегда только bcrypt-хэш.
+    const pin = str(body, 'pin') || pinFromPhone(phone);
+    if (!isValidPin(pin)) throw new ApiError('PIN должен состоять из 4 цифр.');
+
+    const row = await queryOne<DriverRow>(
+      `INSERT INTO drivers (last_name, first_name, phone_digits, pin_hash, role, car_id, hired_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING ${FIELDS}`,
+      [lastName, firstName, phone, await hashPin(pin), role, carId, hiredAt]
+    );
+    if (!row) throw new ApiError('Не удалось создать профиль.', 500);
+
+    return ok({ driver: toDriver(row) });
+  });
 }

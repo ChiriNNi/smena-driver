@@ -3,12 +3,15 @@
 // смотреть и обсуждать поведение до того, как будет готова реальная схема.
 
 import { CHECKLIST as REAL_CHECKLIST, type ChecklistPhase } from './checklist-data';
+import { formatPhoneInput, onlyDigits, pinFromPhone } from './phone';
+import { formatDateRu, km, money } from './report-text';
 
 /* ─── Общие хелперы ──────────────────────────────────────────────────────── */
 
-export function onlyDigits(v: string): string {
-  return v.replace(/\D/g, '');
-}
+// Форматирование номера, даты и сумм живёт в lib/phone.ts и lib/report-text.ts —
+// теми же функциями пользуется серверная часть, поэтому здесь только реэкспорт.
+export { formatPhoneInput, onlyDigits, pinFromPhone, km, money };
+export { formatDateRu as formatDate };
 
 export function nowHHMM(): string {
   const d = new Date();
@@ -19,42 +22,11 @@ export function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** ISO-дата (2026-09-05) → «05.09.2026». Внутри всё в ISO — так сортируется и фильтруется. */
-export function formatDate(iso: string): string {
-  if (!iso) return '—';
-  const [y, m, d] = iso.split('-');
-  return `${d}.${m}.${y}`;
-}
-
-export function money(v: number | string): string {
-  return (Number(v) || 0).toLocaleString('ru-RU') + ' ₸';
-}
-
-export function km(v: number): string {
-  return v.toLocaleString('ru-RU') + ' км';
-}
-
 /** Разница в днях между сегодня и ISO-датой: отрицательная — просрочено. */
 export function daysUntil(iso: string): number {
-  const today = new Date(todayISO()).getTime();
+  const today = new Date(new Date().toISOString().slice(0, 10)).getTime();
   const target = new Date(iso).getTime();
   return Math.round((target - today) / 86400000);
-}
-
-export function pinFromPhone(phone: string): string {
-  return onlyDigits(phone).slice(-4);
-}
-
-export function formatPhoneInput(raw: string): string {
-  const d = onlyDigits(raw).replace(/^8/, '7').slice(0, 11);
-  if (!d) return '';
-  let out = '+7';
-  const rest = d.startsWith('7') ? d.slice(1) : d;
-  if (rest.length > 0) out += ' ' + rest.slice(0, 3);
-  if (rest.length > 3) out += ' ' + rest.slice(3, 6);
-  if (rest.length > 6) out += ' ' + rest.slice(6, 8);
-  if (rest.length > 8) out += ' ' + rest.slice(8, 10);
-  return out;
 }
 
 export function uid(prefix: string): string {
@@ -303,7 +275,7 @@ export function buildShiftReportText(shift: ProtoShift, drivers: ProtoDriver[], 
     'Отчёт по смене — Smena',
     `Водитель: ${driverName(drivers, shift.driverId)}`,
     `Авто: ${carLabel(cars, shift.carId)}`,
-    `Дата: ${formatDate(shift.date)}, ${shift.timeStart}–${shift.timeEnd}`,
+    `Дата: ${formatDateRu(shift.date)}, ${shift.timeStart}–${shift.timeEnd}`,
     `Маршрут: ${shift.placeStart} → ${shift.placeEnd}`,
     `Чек-лист: ${shift.done}/${shift.total} выполнено`,
     `Пробег: ${km(Math.max(0, shift.odoEnd - shift.odoStart))}`,
@@ -374,7 +346,7 @@ export function shiftsToCsv(shifts: ProtoShift[], drivers: ProtoDriver[], cars: 
     'Касса начало', 'Расходы', 'Штрафы', 'Касса конец', 'Замечания',
   ];
   const rows = shifts.map((s) => [
-    formatDate(s.date),
+    formatDateRu(s.date),
     driverName(drivers, s.driverId),
     carLabel(cars, s.carId),
     s.timeStart,
