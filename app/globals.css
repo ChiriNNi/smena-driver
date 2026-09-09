@@ -66,10 +66,13 @@ body {
   .app .p-btn-dark:hover { background: #000; }
   .app .p-btn-outline { background: #fff; color: var(--p-ink); border: 1.5px solid var(--p-border); }
   .app .p-btn-outline:hover { border-color: var(--p-ink-faint); }
+  /* Клавиатура PIN: белые клавиши с обводкой. На тонированном фоне страницы
+     заливка var(--p-tint) почти не читалась — кнопки было не отличить от фона. */
   .app .p-key {
-    border-radius: 20px; background: var(--p-tint); color: var(--p-ink);
-    transition: all 0.2s ease;
+    border-radius: 20px; background: #fff; color: var(--p-ink);
+    box-shadow: inset 0 0 0 1px var(--p-border);
+    transition: all 0.15s ease;
   }
-  .app .p-key:active { background: var(--p-border); transform: scale(0.95); }
+  .app .p-key:active { background: var(--p-tint); box-shadow: inset 0 0 0 1.5px var(--p-green); transform: scale(0.96); }
   .app .p-fade-up { animation: fade-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
 }
