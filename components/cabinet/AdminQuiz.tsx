@@ -3,21 +3,29 @@
 import { useState } from 'react';
 import { formatDate, initials } from '@/lib/labels';
 import type { QuizQuestionAdmin } from '@/lib/model';
+import { useSession } from './session';
 import { useStore } from './store';
 import { Icon } from './icons';
-import { ConfirmDialog, EmptyState, Field, IconButton, Pill, SectionHeader, Sheet, StatTile } from './ui';
+import AdminQuizSummary from './AdminQuizSummary';
+import { ConfirmDialog, EmptyState, Field, IconButton, Pill, SectionHeader, SegmentedTabs, Sheet, StatTile } from './ui';
 
-// Тест по ТБ: вопросы с вариантами и правильным ответом + журнал ознакомления.
-// Проверка ответов в проде остаётся на сервере — на клиент правильные ответы
-// не отдаются, здесь они видны только администратору.
+// Тест по ТБ: банк вопросов и сводка по прохождению.
+//
+// Водителю перед каждой сменой выдаётся случайная выборка из этого банка —
+// чем он больше, тем меньше шансов, что вопросы просто заучат. Правильные
+// ответы видны только здесь: водителю они не отдаются, проверяет сервер.
 
-const EMPTY = { question: '', options: ['', '', ''], correct: 0 };
+const EMPTY = { question: '', options: ['', '', ''], correct: 0, topic: '' };
+
+type Tab = 'bank' | 'summary';
 
 export default function AdminQuiz() {
   const { quiz, acks, drivers, addQuestion, updateQuestion, removeQuestion } = useStore();
+  const { settings } = useSession();
+  const [tab, setTab] = useState<Tab>('bank');
   const [editing, setEditing] = useState<QuizQuestionAdmin | 'new' | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<QuizQuestionAdmin | null>(null);
-  const [form, setForm] = useState<{ question: string; options: string[]; correct: number }>(EMPTY);
+  const [form, setForm] = useState<{ question: string; options: string[]; correct: number; topic: string }>(EMPTY);
 
   const activeDrivers = drivers.filter((d) => d.role === 'driver');
   const passed = activeDrivers.filter((d) => acks.some((a) => a.driverId === d.id)).length;
@@ -28,7 +36,7 @@ export default function AdminQuiz() {
   }
 
   function openEdit(q: QuizQuestionAdmin) {
-    setForm({ question: q.question, options: [...q.options], correct: q.correct });
+    setForm({ question: q.question, options: [...q.options], correct: q.correct, topic: q.topic });
     setEditing(q);
   }
 
@@ -41,25 +49,41 @@ export default function AdminQuiz() {
     const correctText = form.options[form.correct];
     const options = form.options.map((o) => o.trim()).filter(Boolean);
     const correct = Math.max(0, options.indexOf(correctText.trim()));
-    if (editing === 'new') {
-      void addQuestion({ question: form.question.trim(), options, correct });
-    } else if (editing) {
-      void updateQuestion(editing.id, { question: form.question.trim(), options, correct });
-    }
+    const data = { question: form.question.trim(), options, correct, topic: form.topic.trim() };
+    if (editing === 'new') void addQuestion(data);
+    else if (editing) void updateQuestion(editing.id, data);
     setEditing(null);
   }
 
   return (
     <>
+      <SegmentedTabs<Tab>
+        items={[
+          { id: 'bank', label: 'Банк вопросов' },
+          { id: 'summary', label: 'Сводка' },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
+
+      {tab === 'summary' ? (
+        <AdminQuizSummary />
+      ) : (
+        <>
       <div className="grid grid-cols-2 gap-3">
-        <StatTile icon="shield" value={quiz.length} label="Вопросов в тесте" />
+        <StatTile icon="shield" value={quiz.length} label="Вопросов в банке" />
         <StatTile
           icon="users"
           value={`${passed}/${activeDrivers.length}`}
-          label="Прошли тест"
+          label="Прошли инструктаж"
           tone={passed < activeDrivers.length ? 'warn' : undefined}
         />
       </div>
+
+      <p className="rounded-2xl border border-dashed border-[#e7e9e2] bg-[#f5f6f1] p-3 text-xs leading-relaxed text-[#5c6066]">
+        Перед каждой сменой водителю случайно достаётся {settings?.quizPerAttempt ?? 5} вопросов из банка; для допуска
+        нужно {settings?.quizPassScore ?? 5} верных.
+      </p>
 
       <SectionHeader
         title={`Вопросы · ${quiz.length}`}
@@ -81,7 +105,10 @@ export default function AdminQuiz() {
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold tabular-nums text-[#5e9128] ring-1 ring-inset ring-[#e7e9e2]">
                   {i + 1}
                 </div>
-                <p className="min-w-0 flex-1 text-sm font-semibold">{q.question}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{q.question}</p>
+                  {q.topic && <p className="mt-0.5 text-[11px] text-[#9a9d96]">{q.topic}</p>}
+                </div>
                 <IconButton icon="pencil" label="Изменить" onClick={() => openEdit(q)} />
                 <IconButton icon="trash" label="Удалить" tone="danger" onClick={() => setConfirmDelete(q)} />
               </div>
@@ -129,6 +156,8 @@ export default function AdminQuiz() {
           })}
         </div>
       </div>
+        </>
+      )}
 
       {editing && (
         <Sheet
@@ -153,6 +182,14 @@ export default function AdminQuiz() {
               value={form.question}
               onChange={(e) => setForm((f) => ({ ...f, question: e.target.value }))}
               placeholder="Максимальная скорость в городе?"
+            />
+
+            <Field
+              label="Раздел регламента"
+              value={form.topic}
+              onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))}
+              placeholder="Безопасность"
+              hint="По разделам собирается сводка: видно, где водители ошибаются чаще."
             />
 
             <div>

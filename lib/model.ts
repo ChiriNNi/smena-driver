@@ -257,26 +257,44 @@ export function toAssignment(r: AssignmentRow): Assignment {
 
 /* ─── Правила и тест по ТБ ───────────────────────────────────────────────── */
 
-export type Rule = { id: string; title: string; body: string };
-export type RuleRow = { id: string; title: string; body: string };
+/**
+ * Блок регламента: обязанность (duty) или правило (rule).
+ * У обязанностей subtitle — частота: «Ежедневно», «По потребности».
+ */
+export type RuleKind = 'duty' | 'rule';
+
+export const RULE_KIND_TITLE: Record<RuleKind, string> = {
+  duty: 'Обязанности',
+  rule: 'Правила и регламенты',
+};
+
+export type Rule = { id: string; kind: RuleKind; title: string; subtitle: string; body: string; points: string[] };
+export type RuleRow = { id: string; kind: string; title: string; subtitle: string; body: string; points: string[] };
 
 export function toRule(r: RuleRow): Rule {
-  return { id: r.id, title: r.title, body: r.body };
+  return {
+    id: r.id,
+    kind: r.kind === 'duty' ? 'duty' : 'rule',
+    title: r.title,
+    subtitle: r.subtitle ?? '',
+    body: r.body ?? '',
+    points: r.points ?? [],
+  };
 }
 
 /** Вопрос в том виде, в каком его получает водитель — без правильного ответа. */
 export type QuizQuestionPublic = { id: string; question: string; options: string[] };
-/** Вопрос для редактора администратора — с правильным ответом. */
-export type QuizQuestionAdmin = QuizQuestionPublic & { correct: number };
+/** Вопрос для редактора администратора — с правильным ответом и темой. */
+export type QuizQuestionAdmin = QuizQuestionPublic & { correct: number; topic: string };
 
-export type QuizRow = { id: string; question: string; options: string[]; correct_index: number };
+export type QuizRow = { id: string; question: string; options: string[]; correct_index: number; topic?: string };
 
 export function toQuizPublic(r: QuizRow): QuizQuestionPublic {
   return { id: r.id, question: r.question, options: r.options };
 }
 
 export function toQuizAdmin(r: QuizRow): QuizQuestionAdmin {
-  return { id: r.id, question: r.question, options: r.options, correct: r.correct_index };
+  return { id: r.id, question: r.question, options: r.options, correct: r.correct_index, topic: r.topic ?? '' };
 }
 
 export type QuizAttempt = {
@@ -308,13 +326,24 @@ export function toAttempt(r: QuizAttemptRow): QuizAttempt {
   };
 }
 
-/** Допуск к смене: результат последней попытки и срок его действия. */
+/**
+ * Допуск к смене. Тест сдаётся перед каждой сменой, поэтому «срока действия»
+ * в днях больше нет — есть причина, по которой допуска сейчас нет:
+ *  not-passed — тест ещё не проходили;
+ *  failed     — последняя попытка не сдана;
+ *  used       — по этой сдаче уже закрыта смена, нужна новая;
+ *  stale      — сдано слишком давно, а смена так и не началась.
+ */
+export type BriefingReason = 'ok' | 'not-passed' | 'failed' | 'used' | 'stale';
+
 export type BriefingStatus = {
   valid: boolean;
-  validDays: number;
-  /** ISO-дата, до которой действует допуск (null — допуска нет). */
-  validUntil: string | null;
+  reason: BriefingReason;
   latest: QuizAttempt | null;
   /** Есть ли вообще вопросы: если тест не настроен, смену блокировать нечем. */
   configured: boolean;
+  /** Сколько вопросов достаётся на попытку и сколько нужно для допуска. */
+  questionsPerAttempt: number;
+  passScore: number;
+  freshHours: number;
 };

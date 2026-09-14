@@ -64,12 +64,12 @@ type Store = {
   addAssignment: (data: { date: string; driverId: string; carId: string; timeStart: string; timeEnd: string }) => Promise<void>;
   removeAssignment: (id: string) => Promise<void>;
 
-  addRule: (data: { title: string; body?: string }) => Promise<void>;
-  updateRule: (id: string, patch: Partial<{ title: string; body: string }>) => Promise<void>;
+  addRule: (data: api.RuleInput) => Promise<void>;
+  updateRule: (id: string, patch: Partial<api.RuleInput>) => Promise<void>;
   removeRule: (id: string) => Promise<void>;
 
-  addQuestion: (data: { question: string; options: string[]; correct: number }) => Promise<void>;
-  updateQuestion: (id: string, data: { question: string; options: string[]; correct: number }) => Promise<void>;
+  addQuestion: (data: api.QuestionInput) => Promise<void>;
+  updateQuestion: (id: string, data: api.QuestionInput) => Promise<void>;
   removeQuestion: (id: string) => Promise<void>;
 
   saveChecklist: (next: TemplatePhase[]) => Promise<void>;

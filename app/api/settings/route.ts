@@ -19,10 +19,21 @@ export async function PUT(req: NextRequest) {
   return withAdmin(async () => {
     const body = await readBody(req);
 
-    if ('briefingValidDays' in body) {
-      const days = num(body, 'briefingValidDays', { required: true, min: 1 });
-      if (days > 365) throw new ApiError('Срок действия допуска не может превышать 365 дней.');
-      await setSetting(SETTING_KEYS.briefingValidDays, String(Math.round(days)));
+    if ('quizPerAttempt' in body) {
+      const n = num(body, 'quizPerAttempt', { required: true, min: 1 });
+      if (n > 50) throw new ApiError('Больше 50 вопросов на попытку — это уже не проверка перед сменой.');
+      await setSetting(SETTING_KEYS.quizPerAttempt, String(Math.round(n)));
+    }
+
+    if ('quizPassScore' in body) {
+      const n = num(body, 'quizPassScore', { required: true, min: 1 });
+      await setSetting(SETTING_KEYS.quizPassScore, String(Math.round(n)));
+    }
+
+    if ('briefingFreshHours' in body) {
+      const n = num(body, 'briefingFreshHours', { required: true, min: 1 });
+      if (n > 24 * 30) throw new ApiError('Срок свежести теста не может превышать 30 дней.');
+      await setSetting(SETTING_KEYS.briefingFreshHours, String(Math.round(n)));
     }
 
     if ('whatsappTarget' in body) {

@@ -14,6 +14,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const body = await readBody(req);
 
     const question = str(body, 'question', { required: true, max: 500 });
+    const topic = str(body, 'topic', { max: 60 });
     const options = (Array.isArray(body.options) ? body.options : []).map((o) => String(o).trim()).filter(Boolean);
     if (options.length < 2) throw new ApiError('Нужно минимум два варианта ответа.');
 
@@ -23,9 +24,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
 
     const row = await queryOne<QuizRow>(
-      `UPDATE quiz_questions SET question = $1, options = $2::text[], correct_index = $3
-       WHERE id = $4 AND active RETURNING id, question, options, correct_index`,
-      [question, options, correct, id]
+      `UPDATE quiz_questions SET question = $1, options = $2::text[], correct_index = $3, topic = $4
+       WHERE id = $5 AND active RETURNING id, question, options, correct_index, topic`,
+      [question, options, correct, topic, id]
     );
     if (!row) throw new ApiError('Вопрос не найден.', 404);
     return ok({ question: toQuizAdmin(row) });

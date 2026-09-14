@@ -61,31 +61,55 @@ async function seedChecklist() {
   console.log(`• Чек-лист: ${sections} разделов, ${items} пунктов.`);
 }
 
-async function seedRules() {
-  const { rows } = await client.query('SELECT count(*)::int AS n FROM rules');
-  if (rows[0].n > 0) {
-    console.log('• Правила уже заполнены — пропускаю.');
-    return;
-  }
-  for (const [i, rule] of seed.rules.entries()) {
-    await client.query('INSERT INTO rules (title, body, position) VALUES ($1, $2, $3)', [rule.title, rule.body, i]);
-  }
-  console.log(`• Правила: ${seed.rules.length}.`);
+/**
+ * Версия начального наполнения. Регламенты и вопросы обновляются, когда версия
+ * в базе меньше этой: иначе демо-набор из первой установки так и остался бы
+ * вместо настоящих правил компании.
+ */
+const CONTENT_VERSION = 2;
+
+async function currentContentVersion() {
+  const { rows } = await client.query("SELECT value FROM app_settings WHERE key = 'content_version'");
+  return Number(rows[0]?.value ?? 0);
 }
 
-async function seedQuiz() {
-  const { rows } = await client.query('SELECT count(*)::int AS n FROM quiz_questions');
-  if (rows[0].n > 0) {
+async function seedRegulations(replace) {
+  const { rows } = await client.query('SELECT count(*)::int AS n FROM rules');
+  if (rows[0].n > 0 && !replace) {
+    console.log('• Регламенты уже заполнены — пропускаю.');
+    return;
+  }
+  // Регламенты ни на что не ссылаются, поэтому при обновлении заменяются целиком.
+  if (replace) await client.query('DELETE FROM rules');
+
+  for (const [i, block] of seed.regulations.entries()) {
+    await client.query(
+      'INSERT INTO rules (kind, title, subtitle, points, position) VALUES ($1, $2, $3, $4::text[], $5)',
+      [block.kind, block.title, block.subtitle ?? '', block.points, i]
+    );
+  }
+  const duties = seed.regulations.filter((r) => r.kind === 'duty').length;
+  const points = seed.regulations.reduce((a, r) => a + r.points.length, 0);
+  console.log(`• Регламенты: ${duties} блоков обязанностей и ${seed.regulations.length - duties} правил, ${points} пунктов.`);
+}
+
+async function seedQuiz(replace) {
+  const { rows } = await client.query('SELECT count(*)::int AS n FROM quiz_questions WHERE active');
+  if (rows[0].n > 0 && !replace) {
     console.log('• Вопросы теста уже заполнены — пропускаю.');
     return;
   }
+  // Старые вопросы не удаляем, а выводим из оборота: на них ссылаются
+  // сохранённые попытки, и сводка по ним должна остаться читаемой.
+  if (replace) await client.query('UPDATE quiz_questions SET active = false');
+
   for (const [i, q] of seed.quiz.entries()) {
     await client.query(
-      'INSERT INTO quiz_questions (question, options, correct_index, position) VALUES ($1, $2::text[], $3, $4)',
-      [q.question, q.options, q.correct, i]
+      'INSERT INTO quiz_questions (question, options, correct_index, topic, position) VALUES ($1, $2::text[], $3, $4, $5)',
+      [q.question, q.options, q.correct, q.topic ?? '', i]
     );
   }
-  console.log(`• Вопросы теста: ${seed.quiz.length}.`);
+  console.log(`• Вопросы теста: ${seed.quiz.length} (тем: ${new Set(seed.quiz.map((q) => q.topic)).size}).`);
 }
 
 async function seedAdmin() {
@@ -122,8 +146,23 @@ async function seedAdmin() {
 try {
   await client.connect();
   await seedChecklist();
-  await seedRules();
-  await seedQuiz();
+
+  // Обновление содержимого: при переходе на новую версию регламенты и вопросы
+  // заменяются на актуальные, при равной — только дозаполняются пустые таблицы.
+  // Базы, наполненные до появления версий, помечены нулём — их содержимое
+  // тоже нужно обновить, иначе там навсегда останется демо-набор.
+  const version = await currentContentVersion();
+  const replace = version < CONTENT_VERSION;
+  if (replace && version > 0) console.log(`• Обновляю регламенты и вопросы (версия ${version} → ${CONTENT_VERSION}).`);
+
+  await seedRegulations(replace);
+  await seedQuiz(replace);
+  await client.query(
+    `INSERT INTO app_settings (key, value) VALUES ('content_version', $1)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [String(CONTENT_VERSION)]
+  );
+
   await seedAdmin();
   console.log('Готово.');
 } catch (err) {

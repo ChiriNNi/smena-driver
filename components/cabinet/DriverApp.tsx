@@ -11,13 +11,14 @@ import BriefingFlow from './BriefingFlow';
 import ChecklistPhaseView from './ChecklistPhaseView';
 import HistoryTab from './HistoryTab';
 import ProfileTab from './ProfileTab';
+import RegulationsView from './RegulationsView';
 import ShiftInfoCard from './ShiftInfoCard';
 import ShiftReportModal from './ShiftReportModal';
 import BottomNav from './BottomNav';
 import { Icon, phaseIconName } from './icons';
 import { Field, SelectField } from './ui';
 
-type Tab = 'checklist' | 'history' | 'profile';
+type Tab = 'checklist' | 'rules' | 'history' | 'profile';
 
 // Короткие подписи фаз для узкого экрана — «Начало смены» не влезает в треть
 // ширины без переноса, а слово «смены» и так понятно из контекста вкладки.
@@ -518,6 +519,7 @@ export default function DriverApp({ driver, onLogout }: { driver: Driver; onLogo
           </>
         )}
 
+        {tab === 'rules' && <RegulationsView />}
         {tab === 'history' && <HistoryTab driver={driver} />}
         {tab === 'profile' && (
           <ProfileTab
@@ -528,6 +530,7 @@ export default function DriverApp({ driver, onLogout }: { driver: Driver; onLogo
               setRetakeRequested(true);
               setTab('checklist');
             }}
+            onOpenRules={() => setTab('rules')}
           />
         )}
       </main>
@@ -535,6 +538,7 @@ export default function DriverApp({ driver, onLogout }: { driver: Driver; onLogo
       <BottomNav
         items={[
           { id: 'checklist', icon: 'clipboard', label: 'Чек-лист' },
+          { id: 'rules', icon: 'shield', label: 'Правила' },
           { id: 'history', icon: 'clock', label: 'История' },
           { id: 'profile', icon: 'user', label: 'Профиль' },
         ]}

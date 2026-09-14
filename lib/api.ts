@@ -15,6 +15,7 @@ import type {
   QuizQuestionPublic,
   Reminder,
   Rule,
+  RuleKind,
   Shift,
   ShiftItem,
   TemplatePhase,
@@ -195,12 +196,21 @@ export const assignments = {
 
 /* ─── Правила и инструктаж ───────────────────────────────────────────────── */
 
+export type RuleInput = { kind: RuleKind; title: string; subtitle?: string; points: string[] };
+
 export const rules = {
   list: () => get<{ rules: Rule[] }>('/api/rules').then((r) => r.rules),
-  create: (data: { title: string; body?: string }) => send<{ rule: Rule }>('/api/rules', 'POST', data).then((r) => r.rule),
-  update: (id: string, patch: Partial<{ title: string; body: string; position: number }>) =>
+  create: (data: RuleInput) => send<{ rule: Rule }>('/api/rules', 'POST', data).then((r) => r.rule),
+  update: (id: string, patch: Partial<RuleInput> & { position?: number }) =>
     send<{ rule: Rule }>(`/api/rules/${id}`, 'PATCH', patch).then((r) => r.rule),
   remove: (id: string) => send<{ ok: true }>(`/api/rules/${id}`, 'DELETE'),
+};
+
+/** Начатая попытка: набор вопросов зафиксирован на сервере. */
+export type StartedAttempt = {
+  attemptId: string;
+  questions: QuizQuestionPublic[];
+  passScore: number;
 };
 
 /** Разбор одной попытки — то, что показывается водителю на экране результата. */
@@ -208,22 +218,45 @@ export type AttemptResult = {
   score: number;
   total: number;
   passed: boolean;
-  review: { id: string; question: string; options: string[]; correct: number; given: number | null }[];
+  review: { id: string; question: string; options: string[]; correct: number; given: number | null; topic: string }[];
   status: BriefingStatus;
 };
 
+/** Сводка по тестам для администратора. */
+export type QuizSummary = {
+  byDriver: {
+    driverId: string;
+    driverLabel: string;
+    attempts: number;
+    passed: number;
+    failed: number;
+    lastAt: string | null;
+    lastScore: string | null;
+    averagePercent: number;
+  }[];
+  byTopic: { topic: string; asked: number; wrong: number; errorPercent: number }[];
+  hardestQuestions: { id: string; question: string; topic: string; asked: number; wrong: number }[];
+  totals: { attempts: number; passed: number; drivers: number };
+};
+
+export type QuestionInput = { question: string; options: string[]; correct: number; topic?: string };
+
 export const quiz = {
-  /** Водителю приходят вопросы без правильных ответов, администратору — с ними. */
+  /** Весь банк вопросов — для редактора администратора. */
   list: <T extends QuizQuestionPublic | QuizQuestionAdmin>() => get<{ quiz: T[] }>('/api/quiz').then((r) => r.quiz),
-  create: (data: { question: string; options: string[]; correct: number }) =>
-    send<{ question: QuizQuestionAdmin }>('/api/quiz', 'POST', data).then((r) => r.question),
-  update: (id: string, data: { question: string; options: string[]; correct: number }) =>
+  create: (data: QuestionInput) => send<{ question: QuizQuestionAdmin }>('/api/quiz', 'POST', data).then((r) => r.question),
+  update: (id: string, data: QuestionInput) =>
     send<{ question: QuizQuestionAdmin }>(`/api/quiz/${id}`, 'PATCH', data).then((r) => r.question),
   remove: (id: string) => send<{ ok: true }>(`/api/quiz/${id}`, 'DELETE'),
-  /** Отправка ответов: проверяет сервер, попытка попадает в журнал. */
-  submit: (answers: Record<string, number>) => send<AttemptResult>('/api/quiz/attempt', 'POST', { answers }),
+  /** Начать попытку: сервер выдаёт случайную выборку вопросов из банка. */
+  start: () => send<StartedAttempt>('/api/quiz/attempt', 'POST'),
+  /** Отправить ответы этой попытки: проверяет сервер, результат идёт в журнал. */
+  submit: (attemptId: string, answers: Record<string, number>) =>
+    send<AttemptResult>('/api/quiz/attempt', 'PUT', { attemptId, answers }),
   /** Журнал ознакомления: последняя попытка каждого водителя. */
   attempts: () => get<{ attempts: QuizAttempt[] }>('/api/quiz/attempt').then((r) => r.attempts),
+  /** Сводка: кто как сдаёт и в каких темах ошибаются чаще. */
+  summary: () => get<{ summary: QuizSummary }>('/api/quiz/summary').then((r) => r.summary),
 };
 
 export const briefing = {

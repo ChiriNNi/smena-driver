@@ -5,27 +5,50 @@ import { toRule, type RuleRow } from '@/lib/model';
 
 export const dynamic = 'force-dynamic';
 
-// Свод правил и техники безопасности: водитель читает его перед тестом,
-// администратор правит из настроек.
+const FIELDS = 'id, kind, title, subtitle, body, points';
+
+// Регламенты: обязанности и правила. Водитель читает их в кабинете и перед
+// тестом по ТБ, администратор правит из настроек.
 
 export async function GET() {
   return withUser(async () => {
-    const rows = await query<RuleRow>('SELECT id, title, body FROM rules WHERE active ORDER BY position, title');
+    // Порядок фиксированный: сначала обязанности, потом правила, внутри — по position.
+    const rows = await query<RuleRow>(
+      `SELECT ${FIELDS} FROM rules WHERE active
+       ORDER BY CASE kind WHEN 'duty' THEN 0 ELSE 1 END, position, title`
+    );
     return ok({ rules: rows.map(toRule) });
   });
+}
+
+/** Пункты приходят списком строк; пустые строки отбрасываем. */
+export function parsePoints(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((p) => String(p).trim()).filter(Boolean);
 }
 
 export async function POST(req: NextRequest) {
   return withAdmin(async () => {
     const body = await readBody(req);
-    // Новый пункт становится последним — порядок правил осмысленный, а не алфавитный.
+    const kind = str(body, 'kind') === 'duty' ? 'duty' : 'rule';
+    const points = parsePoints(body.points);
+    if (points.length === 0) throw new ApiError('Добавьте хотя бы один пункт.');
+
+    // Новый блок встаёт последним среди своего вида — порядок регламента
+    // осмысленный, а не алфавитный.
     const row = await queryOne<RuleRow>(
-      `INSERT INTO rules (title, body, position)
-       VALUES ($1, $2, (SELECT coalesce(max(position), -1) + 1 FROM rules))
-       RETURNING id, title, body`,
-      [str(body, 'title', { required: true, max: 200 }), str(body, 'body', { max: 4000 })]
+      `INSERT INTO rules (kind, title, subtitle, body, points, position)
+       VALUES ($1, $2, $3, $4, $5::text[], (SELECT coalesce(max(position), -1) + 1 FROM rules WHERE kind = $1))
+       RETURNING ${FIELDS}`,
+      [
+        kind,
+        str(body, 'title', { required: true, max: 200 }),
+        str(body, 'subtitle', { max: 80 }),
+        str(body, 'body', { max: 4000 }),
+        points,
+      ]
     );
-    if (!row) throw new ApiError('Не удалось добавить правило.', 500);
+    if (!row) throw new ApiError('Не удалось добавить блок регламента.', 500);
     return ok({ rule: toRule(row) });
   });
 }

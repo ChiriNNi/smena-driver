@@ -25,7 +25,7 @@ type Session = {
   refreshBriefing: () => Promise<void>;
 };
 
-const DEFAULT_SETTINGS: AppSettings = { briefingValidDays: 30, whatsappTarget: '' };
+const DEFAULT_SETTINGS: AppSettings = { quizPerAttempt: 5, quizPassScore: 5, briefingFreshHours: 24, whatsappTarget: '' };
 
 const SessionContext = createContext<Session | null>(null);
 

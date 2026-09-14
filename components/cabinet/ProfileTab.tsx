@@ -1,24 +1,36 @@
 'use client';
 
 import { carLabel, formatDate, initials } from '@/lib/labels';
-import type { Driver } from '@/lib/model';
+import type { BriefingReason, Driver } from '@/lib/model';
 import { useSession } from './session';
 import { useStore } from './store';
 import { Icon } from './icons';
-import { CardTitle, Pill, SectionHeader } from './ui';
+import { CardTitle, Pill } from './ui';
 
-// Профиль водителя: свои данные, состояние допуска по ТБ, правила, выход.
+// Профиль водителя: свои данные, состояние допуска по ТБ, выход.
+// Сами регламенты живут на отдельной вкладке «Правила» — здесь только ссылка.
+
+/** Что показать водителю, когда допуска нет. */
+const REASON_TEXT: Record<BriefingReason, string> = {
+  ok: '',
+  'not-passed': 'Тест ещё не пройден — без него смена не начнётся.',
+  failed: 'Прошлая попытка не сдана. Пройдите тест заново — без этого смена не начнётся.',
+  used: 'По прошлой сдаче смена уже закрыта. Перед новой сменой тест проходится заново.',
+  stale: 'С прошлой сдачи прошло слишком много времени — перед сменой нужно пройти тест заново.',
+};
 
 export default function ProfileTab({
   driver,
   onLogout,
   onSendWhatsApp,
   onRetakeBriefing,
+  onOpenRules,
 }: {
   driver: Driver;
   onLogout: () => void;
   onSendWhatsApp: () => void;
   onRetakeBriefing: () => void;
+  onOpenRules: () => void;
 }) {
   const { cars, rules } = useStore();
   const { briefing } = useSession();
@@ -67,12 +79,8 @@ export default function ProfileTab({
         <CardTitle icon="shield" title="Инструктаж по ТБ" />
         <p className="text-xs leading-relaxed text-[#5c6066]">
           {briefingValid
-            ? `Тест сдан ${ack ? formatDate(ack.date) : ''} без ошибок. Допуск действует до ${
-                briefing?.validUntil ? formatDate(briefing.validUntil) : '—'
-              }.`
-            : ack
-              ? `Последняя попытка: ${ack.score}/${ack.total} от ${formatDate(ack.date)}. Нужно пройти заново — без этого смена не начнётся.`
-              : 'Тест ещё не пройден — без него смена не начнётся.'}
+            ? `Тест сдан${ack ? ` ${formatDate(ack.date)}` : ''} — допуск к смене открыт.`
+            : REASON_TEXT[briefing?.reason ?? 'not-passed']}
         </p>
         <button
           onClick={onRetakeBriefing}
@@ -83,28 +91,21 @@ export default function ProfileTab({
       </div>
 
       {rules.length > 0 && (
-        <>
-          <SectionHeader title="Правила и техника безопасности" />
-          <div className="p-card p-4">
-            <CardTitle icon="shield" title={`Свод правил · ${rules.length}`} />
-            <div className="flex flex-col">
-              {rules.map((rule, i) => (
-                <div key={rule.id} className="p-card-line py-2.5 last:border-none">
-                  <p className="text-sm font-semibold">
-                    {i + 1}. {rule.title}
-                  </p>
-                  {rule.body && <p className="mt-1 text-xs leading-relaxed text-[#5c6066]">{rule.body}</p>}
-                </div>
-              ))}
-            </div>
+        <button onClick={onOpenRules} className="p-card flex items-center gap-3 p-4 text-left transition active:scale-[0.99]">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#8fc640]/15 text-[#5e9128]">
+            <Icon name="clipboard" size={18} />
           </div>
-        </>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold">Обязанности и правила</p>
+            <p className="text-xs text-[#5c6066]">Полный регламент — {rules.length} блоков</p>
+          </div>
+          <Icon name="arrow-right" size={16} className="shrink-0 text-[#9a9d96]" />
+        </button>
       )}
 
       <button onClick={onLogout} className="p-btn p-btn-outline py-3">
         Выйти
       </button>
-
     </div>
   );
 }

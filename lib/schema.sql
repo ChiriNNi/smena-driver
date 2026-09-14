@@ -180,6 +180,9 @@ CREATE INDEX IF NOT EXISTS idx_assignments_date ON assignments(date_iso);
 
 /* ─── Правила и тест по ТБ ───────────────────────────────────────────────── */
 
+-- Регламенты: обязанности (kind = duty) и правила (kind = rule). Один блок —
+-- заголовок, необязательный подзаголовок (у обязанностей это частота:
+-- «Ежедневно», «По потребности») и список пунктов.
 CREATE TABLE IF NOT EXISTS rules (
   id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title    TEXT NOT NULL,
@@ -187,6 +190,10 @@ CREATE TABLE IF NOT EXISTS rules (
   position INTEGER NOT NULL DEFAULT 0,
   active   BOOLEAN NOT NULL DEFAULT true
 );
+
+ALTER TABLE rules ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'rule';
+ALTER TABLE rules ADD COLUMN IF NOT EXISTS subtitle TEXT NOT NULL DEFAULT '';
+ALTER TABLE rules ADD COLUMN IF NOT EXISTS points TEXT[] NOT NULL DEFAULT '{}';
 
 -- correct_index никогда не уходит на клиент водителя: ответы проверяет сервер
 -- (иначе правильные варианты видно в исходниках страницы).
@@ -199,7 +206,16 @@ CREATE TABLE IF NOT EXISTS quiz_questions (
   active        BOOLEAN NOT NULL DEFAULT true
 );
 
--- Журнал попыток: хранится каждая, допуск считается по последней.
+-- Тема вопроса — раздел регламента, к которому он относится. По ней в сводке
+-- видно, где водители ошибаются чаще всего.
+ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS topic TEXT NOT NULL DEFAULT '';
+
+-- Журнал попыток: хранится каждая, допуск считается по последней завершённой.
+--
+-- Набор вопросов фиксируется при старте попытки (question_ids) и только по нему
+-- считается результат: иначе можно было бы прислать ответ на один вопрос и
+-- получить «1 из 1». Ответы сохраняются целиком — из них строится сводка по
+-- темам, в которых водители ошибаются.
 CREATE TABLE IF NOT EXISTS quiz_attempts (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   driver_id  UUID NOT NULL REFERENCES drivers(id) ON DELETE CASCADE,
@@ -209,6 +225,17 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
   passed     BOOLEAN NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE quiz_attempts ADD COLUMN IF NOT EXISTS question_ids UUID[] NOT NULL DEFAULT '{}';
+ALTER TABLE quiz_attempts ADD COLUMN IF NOT EXISTS answers JSONB NOT NULL DEFAULT '{}';
+-- Пока finished_at пуст, попытка не засчитана: водитель открыл тест и не сдал.
+ALTER TABLE quiz_attempts ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ;
+
+-- Попытки, сделанные до появления этой колонки, были завершёнными по самому
+-- своему устройству (тогда результат записывался одним запросом). Узнаём их по
+-- пустому набору вопросов и проставляем время, иначе журнал бы обнулился.
+UPDATE quiz_attempts SET finished_at = created_at
+WHERE finished_at IS NULL AND question_ids = '{}' AND total > 0;
 
 CREATE INDEX IF NOT EXISTS idx_quiz_attempts_driver ON quiz_attempts(driver_id, created_at DESC);
 
