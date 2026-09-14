@@ -39,7 +39,8 @@ export async function PUT(req: NextRequest) {
 export async function GET() {
   return withAdmin(async () => {
     const rows = await query<QuizAttemptRow>(
-      `SELECT DISTINCT ON (driver_id) id, driver_id, date_iso::text AS date_iso, score, total, passed
+      `SELECT DISTINCT ON (driver_id) id, driver_id, date_iso::text AS date_iso, score, total, passed,
+              signed_at::text AS signed_at, signature_name
        FROM quiz_attempts WHERE finished_at IS NOT NULL
        ORDER BY driver_id, finished_at DESC`
     );

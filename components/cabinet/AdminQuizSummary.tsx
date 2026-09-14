@@ -87,6 +87,12 @@ export default function AdminQuizSummary() {
               </div>
             </div>
           )}
+
+          {d.attempts > 0 && (
+            <p className="mt-2 text-[11px] text-[#9a9d96]">
+              подписано ознакомлений: {d.signed} из {d.passed} сданных
+            </p>
+          )}
         </div>
       ))}
 

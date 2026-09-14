@@ -15,21 +15,27 @@ import { Pill } from './ui';
 // ответы: правильные варианты в браузер не попадают, а заучить «ответы по
 // порядку» нельзя — набор каждый раз другой.
 
-type Step = 'rules' | 'quiz' | 'result';
+type Step = 'rules' | 'quiz' | 'result' | 'sign';
 
 /** Почему допуска сейчас нет — этим объясняем водителю, зачем он снова здесь. */
 const REASON_TEXT: Record<BriefingReason, string> = {
   ok: '',
   'not-passed': 'Тест ещё не пройден.',
   failed: 'Прошлая попытка не сдана.',
+  'not-signed': 'Тест сдан, осталось подписать ознакомление.',
   used: 'По прошлой сдаче смена уже закрыта — перед новой сменой тест проходится заново.',
   stale: 'С прошлой сдачи прошло слишком много времени, а смена так и не началась.',
 };
 
 export default function BriefingFlow({ onDone, onExit }: { onDone: () => void | Promise<void>; onExit?: () => void }) {
-  const { briefing } = useSession();
+  const { user, briefing, refreshBriefing } = useSession();
 
-  const [step, setStep] = useState<Step>('rules');
+  // Тест уже сдан, не хватает подписи (например, приложение закрыли на этом
+  // шаге) — продолжаем с подписи, а не гоняем человека по вопросам заново.
+  const pending = briefing?.pendingSignature ?? null;
+  const [step, setStep] = useState<Step>(pending ? 'sign' : 'rules');
+  const [signedAttemptId, setSignedAttemptId] = useState<string | null>(pending?.attemptId ?? null);
+  const [signing, setSigning] = useState(false);
   const [attempt, setAttempt] = useState<api.StartedAttempt | null>(null);
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
@@ -67,13 +73,80 @@ export default function BriefingFlow({ onDone, onExit }: { onDone: () => void | 
     setBusy(true);
     setError('');
     try {
-      setResult(await api.quiz.submit(attempt.attemptId, answers));
+      const res = await api.quiz.submit(attempt.attemptId, answers);
+      setResult(res);
+      setSignedAttemptId(res.passed ? attempt.attemptId : null);
       setStep('result');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось отправить ответы.');
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Подпись: ФИО подставляет сервер из профиля, водитель только подтверждает. */
+  async function sign() {
+    if (!signedAttemptId) return;
+    setSigning(true);
+    setError('');
+    try {
+      await api.quiz.sign(signedAttemptId);
+      await refreshBriefing();
+      await onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось подписать ознакомление.');
+    } finally {
+      setSigning(false);
+    }
+  }
+
+  /* ─── Шаг подписи ──────────────────────────────────────────────────────── */
+
+  if (step === 'sign') {
+    const score = result ? `${result.score} из ${result.total}` : pending ? `${pending.score} из ${pending.total}` : '';
+    return (
+      <div className="flex flex-col gap-4 px-4 py-6">
+        <div className="p-fade-up mx-auto max-w-xs text-center">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-[#8fc640]/15 text-[#5e9128]">
+            <Icon name="pencil" size={24} />
+          </div>
+          <h2 className="text-lg font-bold">Подпись об ознакомлении</h2>
+          <p className="mt-1.5 text-sm leading-relaxed text-[#5c6066]">
+            Тест сдан{score ? ` — ${score} верно` : ''}. Подтвердите, что ознакомились с обязанностями и правилами.
+          </p>
+        </div>
+
+        <div className="p-card p-5">
+          <p className="p-eyebrow mb-1.5">Подписывает</p>
+          <p className="text-base font-bold">
+            {user?.lastName} {user?.firstName}
+          </p>
+          <p className="mt-0.5 text-xs text-[#9a9d96]">{user?.phone}</p>
+
+          <div className="mt-4 border-t border-dashed border-[#e7e9e2] pt-3">
+            <p className="text-xs leading-relaxed text-[#5c6066]">
+              Нажимая «Подписать», вы подтверждаете, что прочитали действующий регламент, поняли его и обязуетесь
+              соблюдать. Дата и время подписи сохраняются в журнале.
+            </p>
+          </div>
+        </div>
+
+        {error && <p className="text-center text-sm font-medium text-[#c0564a]">{error}</p>}
+
+        <button
+          onClick={() => void sign()}
+          disabled={signing}
+          className="p-btn p-btn-primary flex items-center justify-center gap-1.5 py-3.5"
+        >
+          {signing ? 'Подписываем…' : 'Подписать и приступить к смене'}
+          {!signing && <Icon name="check" size={16} />}
+        </button>
+
+        <button onClick={() => setStep('rules')} className="p-btn p-btn-outline py-3 text-xs">
+          Перечитать регламент
+        </button>
+      </div>
+    );
   }
 
   /* ─── Шаг 1. Регламенты ────────────────────────────────────────────────── */
@@ -264,8 +337,8 @@ export default function BriefingFlow({ onDone, onExit }: { onDone: () => void | 
       </div>
 
       {passed ? (
-        <button onClick={() => void onDone()} className="p-btn p-btn-primary flex items-center justify-center gap-1.5 py-3.5">
-          Приступить к смене
+        <button onClick={() => setStep('sign')} className="p-btn p-btn-primary flex items-center justify-center gap-1.5 py-3.5">
+          Перейти к подписи
           <Icon name="arrow-right" size={15} />
         </button>
       ) : (

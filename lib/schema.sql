@@ -237,6 +237,18 @@ ALTER TABLE quiz_attempts ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ;
 UPDATE quiz_attempts SET finished_at = created_at
 WHERE finished_at IS NULL AND question_ids = '{}' AND total > 0;
 
+-- Подпись об ознакомлении. Ставится после сданного теста отдельным действием:
+-- сам факт подписи и есть подтверждение, что водитель прочитал регламент, а не
+-- просто угадал ответы. Имя сохраняется снимком — на случай, если потом
+-- фамилию в профиле поправят.
+ALTER TABLE quiz_attempts ADD COLUMN IF NOT EXISTS signed_at TIMESTAMPTZ;
+ALTER TABLE quiz_attempts ADD COLUMN IF NOT EXISTS signature_name TEXT;
+
+-- Попытки, сданные до появления подписи, считаем подписанными: иначе у
+-- водителей внезапно пропал бы допуск из-за шага, которого тогда не было.
+UPDATE quiz_attempts SET signed_at = finished_at, signature_name = ''
+WHERE signed_at IS NULL AND finished_at IS NOT NULL AND passed AND question_ids = '{}';
+
 CREATE INDEX IF NOT EXISTS idx_quiz_attempts_driver ON quiz_attempts(driver_id, created_at DESC);
 
 /* ─── Настройки приложения ───────────────────────────────────────────────── */

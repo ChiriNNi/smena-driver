@@ -15,17 +15,20 @@ import { getSettings } from './settings';
 // поля correct_index, разбор возвращается уже после отправки.
 
 const ATTEMPT_FIELDS =
-  'id, driver_id, date_iso::text AS date_iso, score, total, passed, created_at::text AS created_at';
+  `id, driver_id, date_iso::text AS date_iso, score, total, passed,
+   created_at::text AS created_at, signed_at::text AS signed_at, signature_name`;
+
+type LatestAttempt = QuizAttempt & { createdAt: string; signedAt: string | null };
 
 /** Последняя завершённая попытка водителя. Незавершённые (открыл и бросил) не в счёт. */
-async function latestAttempt(driverId: string): Promise<(QuizAttempt & { createdAt: string }) | null> {
-  const row = await queryOne<QuizAttemptRow & { created_at: string }>(
+async function latestAttempt(driverId: string): Promise<LatestAttempt | null> {
+  const row = await queryOne<QuizAttemptRow & { created_at: string; signed_at: string | null }>(
     `SELECT ${ATTEMPT_FIELDS} FROM quiz_attempts
      WHERE driver_id = $1 AND finished_at IS NOT NULL
      ORDER BY finished_at DESC LIMIT 1`,
     [driverId]
   );
-  return row ? { ...toAttempt(row), createdAt: row.created_at } : null;
+  return row ? { ...toAttempt(row), createdAt: row.created_at, signedAt: row.signed_at } : null;
 }
 
 /**
@@ -35,6 +38,10 @@ async function latestAttempt(driverId: string): Promise<(QuizAttempt & { created
  * закрыта прошлая смена, и не раньше чем N часов назад. Первое условие и даёт
  * требование «перед каждой сменой», второе отсекает вчерашнюю сдачу, если
  * смена так и не началась.
+ *
+ * Сданный тест сам по себе допуска не даёт: нужна ещё подпись об ознакомлении.
+ * Если тест сдан, а подпись не поставлена, возвращаем pendingSignature —
+ * водитель продолжит с шага подписи, а не будет проходить тест заново.
  */
 export async function getBriefingStatus(driverId: string): Promise<BriefingStatus> {
   const [settings, latest, countRow, lastShift] = await Promise.all([
@@ -52,6 +59,7 @@ export async function getBriefingStatus(driverId: string): Promise<BriefingStatu
 
   let valid = false;
   let reason: BriefingStatus['reason'] = 'not-passed';
+  let pendingSignature: BriefingStatus['pendingSignature'] = null;
 
   if (!configured) {
     // Банк вопросов пуст — блокировать смену нечем, иначе водитель не сможет работать.
@@ -65,19 +73,50 @@ export async function getBriefingStatus(driverId: string): Promise<BriefingStatu
     const usedByShift = lastShift ? new Date(lastShift.created_at).getTime() > attemptAt : false;
     const stale = Date.now() - attemptAt > freshMs;
 
-    valid = !usedByShift && !stale;
-    reason = usedByShift ? 'used' : stale ? 'stale' : 'ok';
+    if (usedByShift) reason = 'used';
+    else if (stale) reason = 'stale';
+    else if (!latest.signedAt) {
+      reason = 'not-signed';
+      pendingSignature = { attemptId: latest.id, score: latest.score, total: latest.total };
+    } else reason = 'ok';
+
+    valid = reason === 'ok';
   }
 
   return {
     valid,
     reason,
     latest,
+    pendingSignature,
     configured,
     questionsPerAttempt: Math.min(settings.quizPerAttempt, Number(countRow?.n ?? 0) || settings.quizPerAttempt),
     passScore: settings.quizPassScore,
     freshHours: settings.briefingFreshHours,
   };
+}
+
+/**
+ * Подпись об ознакомлении. Имя берётся из профиля и сохраняется снимком:
+ * если фамилию потом поправят, в журнале останется та, под которой подписали.
+ */
+export async function signAttempt(driverId: string, attemptId: string): Promise<BriefingStatus> {
+  const attempt = await queryOne<{ passed: boolean; signed_at: string | null }>(
+    'SELECT passed, signed_at::text AS signed_at FROM quiz_attempts WHERE id = $1 AND driver_id = $2 AND finished_at IS NOT NULL',
+    [attemptId, driverId]
+  );
+  if (!attempt) throw new ApiError('Попытка не найдена.', 404);
+  if (!attempt.passed) throw new ApiError('Подписать можно только сданный тест.', 409);
+
+  if (!attempt.signed_at) {
+    await query(
+      `UPDATE quiz_attempts SET signed_at = now(),
+              signature_name = (SELECT last_name || ' ' || first_name FROM drivers WHERE id = $2)
+       WHERE id = $1`,
+      [attemptId, driverId]
+    );
+  }
+
+  return getBriefingStatus(driverId);
 }
 
 /* ─── Попытка ────────────────────────────────────────────────────────────── */
@@ -190,6 +229,7 @@ export type QuizSummary = {
     driverLabel: string;
     attempts: number;
     passed: number;
+    signed: number;
     failed: number;
     lastAt: string | null;
     lastScore: string | null;
@@ -211,6 +251,7 @@ export async function getQuizSummary(): Promise<QuizSummary> {
     driver_label: string;
     attempts: string;
     passed: string;
+    signed: string;
     last_at: string | null;
     last_score: string | null;
     average_percent: string | null;
@@ -219,6 +260,7 @@ export async function getQuizSummary(): Promise<QuizSummary> {
             d.last_name || ' ' || d.first_name AS driver_label,
             count(a.id)::text AS attempts,
             count(a.id) FILTER (WHERE a.passed)::text AS passed,
+            count(a.id) FILTER (WHERE a.signed_at IS NOT NULL)::text AS signed,
             max(a.finished_at)::text AS last_at,
             (SELECT last.score || '/' || last.total FROM quiz_attempts last
              WHERE last.driver_id = d.id AND last.finished_at IS NOT NULL
@@ -264,6 +306,7 @@ export async function getQuizSummary(): Promise<QuizSummary> {
     driverLabel: d.driver_label,
     attempts: Number(d.attempts),
     passed: Number(d.passed),
+    signed: Number(d.signed),
     failed: Number(d.attempts) - Number(d.passed),
     lastAt: d.last_at,
     lastScore: d.last_score,

@@ -304,6 +304,9 @@ export type QuizAttempt = {
   score: number;
   total: number;
   passed: boolean;
+  /** Когда подписано ознакомление и под каким именем (снимок на момент подписи). */
+  signedAt: string | null;
+  signatureName: string;
 };
 
 export type QuizAttemptRow = {
@@ -313,6 +316,8 @@ export type QuizAttemptRow = {
   score: number;
   total: number;
   passed: boolean;
+  signed_at?: string | null;
+  signature_name?: string | null;
 };
 
 export function toAttempt(r: QuizAttemptRow): QuizAttempt {
@@ -323,6 +328,8 @@ export function toAttempt(r: QuizAttemptRow): QuizAttempt {
     score: r.score,
     total: r.total,
     passed: r.passed,
+    signedAt: r.signed_at ?? null,
+    signatureName: r.signature_name ?? '',
   };
 }
 
@@ -331,15 +338,18 @@ export function toAttempt(r: QuizAttemptRow): QuizAttempt {
  * в днях больше нет — есть причина, по которой допуска сейчас нет:
  *  not-passed — тест ещё не проходили;
  *  failed     — последняя попытка не сдана;
+ *  not-signed — тест сдан, но подпись об ознакомлении не поставлена;
  *  used       — по этой сдаче уже закрыта смена, нужна новая;
  *  stale      — сдано слишком давно, а смена так и не началась.
  */
-export type BriefingReason = 'ok' | 'not-passed' | 'failed' | 'used' | 'stale';
+export type BriefingReason = 'ok' | 'not-passed' | 'failed' | 'not-signed' | 'used' | 'stale';
 
 export type BriefingStatus = {
   valid: boolean;
   reason: BriefingReason;
   latest: QuizAttempt | null;
+  /** Сданный, но не подписанный тест — водитель продолжит с шага подписи. */
+  pendingSignature: { attemptId: string; score: number; total: number } | null;
   /** Есть ли вообще вопросы: если тест не настроен, смену блокировать нечем. */
   configured: boolean;
   /** Сколько вопросов достаётся на попытку и сколько нужно для допуска. */

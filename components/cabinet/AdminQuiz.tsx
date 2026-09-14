@@ -145,9 +145,15 @@ export default function AdminQuiz() {
                   {d.lastName} {d.firstName}
                 </p>
                 {ack ? (
-                  <Pill tone={ack.score === ack.total ? 'good' : 'warn'}>
-                    {ack.score}/{ack.total} · {formatDate(ack.date)}
-                  </Pill>
+                  <div className="flex shrink-0 flex-col items-end gap-0.5">
+                    <Pill tone={ack.passed ? 'good' : 'warn'}>
+                      {ack.score}/{ack.total} · {formatDate(ack.date)}
+                    </Pill>
+                    {/* Подпись — отдельный факт: тест можно сдать и не подписать. */}
+                    <span className={'text-[10px] ' + (ack.signedAt ? 'text-[#5e9128]' : 'text-[#c0564a]')}>
+                      {ack.signedAt ? 'ознакомление подписано' : 'без подписи'}
+                    </span>
+                  </div>
                 ) : (
                   <Pill tone="bad">не пройден</Pill>
                 )}

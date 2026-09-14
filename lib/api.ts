@@ -229,6 +229,7 @@ export type QuizSummary = {
     driverLabel: string;
     attempts: number;
     passed: number;
+    signed: number;
     failed: number;
     lastAt: string | null;
     lastScore: string | null;
@@ -253,6 +254,9 @@ export const quiz = {
   /** Отправить ответы этой попытки: проверяет сервер, результат идёт в журнал. */
   submit: (attemptId: string, answers: Record<string, number>) =>
     send<AttemptResult>('/api/quiz/attempt', 'PUT', { attemptId, answers }),
+  /** Подпись об ознакомлении: ФИО сервер подставляет сам из профиля. */
+  sign: (attemptId: string) =>
+    send<{ briefing: BriefingStatus }>('/api/quiz/attempt/sign', 'POST', { attemptId }).then((r) => r.briefing),
   /** Журнал ознакомления: последняя попытка каждого водителя. */
   attempts: () => get<{ attempts: QuizAttempt[] }>('/api/quiz/attempt').then((r) => r.attempts),
   /** Сводка: кто как сдаёт и в каких темах ошибаются чаще. */

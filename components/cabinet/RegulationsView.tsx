@@ -74,6 +74,20 @@ export default function RegulationsView({ compact = false }: { compact?: boolean
         />
       )}
 
+      {!compact && (
+        // Печатная версия открывается отдельной вкладкой: там браузер сам
+        // предлагает «Сохранить как PDF» — и на компьютере, и на телефоне.
+        <a
+          href="/rules/print"
+          target="_blank"
+          rel="noreferrer"
+          className="p-btn p-btn-outline flex items-center justify-center gap-1.5 py-3 text-xs"
+        >
+          <Icon name="download" size={14} />
+          Сохранить регламент в PDF
+        </a>
+      )}
+
       {groups.map(([title, blocks], i) => (
         <div key={title} className="p-card p-fade-up p-4" style={{ animationDelay: `${Math.min(i, 6) * 0.04}s` }}>
           <h3 className="mb-3 flex items-start gap-2 text-sm font-bold">

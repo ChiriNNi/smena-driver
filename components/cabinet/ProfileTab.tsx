@@ -15,6 +15,7 @@ const REASON_TEXT: Record<BriefingReason, string> = {
   ok: '',
   'not-passed': 'Тест ещё не пройден — без него смена не начнётся.',
   failed: 'Прошлая попытка не сдана. Пройдите тест заново — без этого смена не начнётся.',
+  'not-signed': 'Тест сдан, но ознакомление не подписано — без подписи смена не начнётся.',
   used: 'По прошлой сдаче смена уже закрыта. Перед новой сменой тест проходится заново.',
   stale: 'С прошлой сдачи прошло слишком много времени — перед сменой нужно пройти тест заново.',
 };
@@ -79,14 +80,14 @@ export default function ProfileTab({
         <CardTitle icon="shield" title="Инструктаж по ТБ" />
         <p className="text-xs leading-relaxed text-[#5c6066]">
           {briefingValid
-            ? `Тест сдан${ack ? ` ${formatDate(ack.date)}` : ''} — допуск к смене открыт.`
+            ? `Тест сдан${ack ? ` ${formatDate(ack.date)}` : ''}, ознакомление подписано — допуск к смене открыт.`
             : REASON_TEXT[briefing?.reason ?? 'not-passed']}
         </p>
         <button
           onClick={onRetakeBriefing}
           className={'p-btn mt-3 w-full py-3 text-xs ' + (briefingValid ? 'p-btn-outline' : 'p-btn-primary')}
         >
-          {briefingValid ? 'Пройти инструктаж заново' : 'Пройти инструктаж'}
+          {briefingValid ? 'Пройти инструктаж заново' : briefing?.reason === 'not-signed' ? 'Подписать ознакомление' : 'Пройти инструктаж'}
         </button>
       </div>
 
