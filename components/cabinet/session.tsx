@@ -21,8 +21,15 @@ type Session = {
   loading: boolean;
   login: (phone: string, pin: string) => Promise<void>;
   logout: () => Promise<void>;
-  /** Перечитать допуск: после прохождения теста по ТБ. */
+  /** Перечитать допуск с сервера. */
   refreshBriefing: () => Promise<void>;
+  /**
+   * Записать допуск, который сервер только что вернул сам (после отправки
+   * ответов или подписи). Так состояние обновляется без второго запроса —
+   * и, главное, не зависит от того, дойдёт ли он: на плохой связи иначе
+   * экран инструктажа оставался на месте, хотя подпись уже принята.
+   */
+  setBriefingStatus: (status: BriefingStatus) => void;
 };
 
 const DEFAULT_SETTINGS: AppSettings = { quizPerAttempt: 5, quizPassScore: 5, briefingFreshHours: 24, whatsappTarget: '' };
@@ -80,6 +87,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         /* допуск перечитается при следующем запуске */
       }
     },
+    setBriefingStatus: setBriefing,
   };
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

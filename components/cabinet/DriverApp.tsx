@@ -45,7 +45,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 export default function DriverApp({ driver, onLogout }: { driver: Driver; onLogout: () => void }) {
   const { checklist, cars, loading, finishShift } = useStore();
-  const { briefing, settings, photoUploadEnabled, refreshBriefing } = useSession();
+  const { briefing, settings, photoUploadEnabled } = useSession();
 
   const [tab, setTab] = useState<Tab>('checklist');
   // Инструктаж по ТБ обязателен, пока сервер не подтвердит допуск. Значение
@@ -364,10 +364,9 @@ export default function DriverApp({ driver, onLogout }: { driver: Driver; onLogo
 
         {tab === 'checklist' && !loading && briefingOpen && (
           <BriefingFlow
-            onDone={async () => {
-              setRetakeRequested(false);
-              await refreshBriefing();
-            }}
+            // Допуск к этому моменту уже обновлён ответом сервера на подпись,
+            // поэтому здесь только закрываем инструктаж.
+            onDone={() => setRetakeRequested(false)}
             onExit={briefingValid ? () => setRetakeRequested(false) : undefined}
           />
         )}

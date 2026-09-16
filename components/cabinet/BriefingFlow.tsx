@@ -28,7 +28,7 @@ const REASON_TEXT: Record<BriefingReason, string> = {
 };
 
 export default function BriefingFlow({ onDone, onExit }: { onDone: () => void | Promise<void>; onExit?: () => void }) {
-  const { user, briefing, refreshBriefing } = useSession();
+  const { user, briefing, setBriefingStatus } = useSession();
 
   // Тест уже сдан, не хватает подписи (например, приложение закрыли на этом
   // шаге) — продолжаем с подписи, а не гоняем человека по вопросам заново.
@@ -76,6 +76,9 @@ export default function BriefingFlow({ onDone, onExit }: { onDone: () => void | 
       const res = await api.quiz.submit(attempt.attemptId, answers);
       setResult(res);
       setSignedAttemptId(res.passed ? attempt.attemptId : null);
+      // Сервер вернул актуальный допуск вместе с результатом — берём его,
+      // лишний запрос не нужен.
+      setBriefingStatus(res.status);
       setStep('result');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось отправить ответы.');
@@ -90,8 +93,9 @@ export default function BriefingFlow({ onDone, onExit }: { onDone: () => void | 
     setSigning(true);
     setError('');
     try {
-      await api.quiz.sign(signedAttemptId);
-      await refreshBriefing();
+      // Ответ на подпись уже содержит новое состояние допуска: применяем его
+      // и сразу уходим к смене, не дожидаясь отдельного запроса.
+      setBriefingStatus(await api.quiz.sign(signedAttemptId));
       await onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось подписать ознакомление.');
