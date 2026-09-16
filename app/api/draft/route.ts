@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { ApiError, ok, withUser } from '@/lib/api-helpers';
+import { collectDraftPhotoPaths, discardUnusedPhotos, extractPhotoPaths } from '@/lib/draft-photos';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,12 +40,18 @@ export async function PUT(req: NextRequest) {
       throw new ApiError('Черновик слишком большой.', 413);
     }
 
+    // Что было в черновике до перезаписи: снятые с замечаний фото удаляем,
+    // иначе они остаются в бакете навсегда.
+    const before = await collectDraftPhotoPaths(user.id);
+
     const row = await queryOne<{ updated_at: string }>(
       `INSERT INTO shift_drafts (driver_id, data) VALUES ($1, $2::jsonb)
        ON CONFLICT (driver_id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
        RETURNING updated_at`,
       [user.id, serialized]
     );
+
+    void discardUnusedPhotos(before, extractPhotoPaths(body));
 
     return ok({ ok: true, updatedAt: row?.updated_at ?? null });
   });
@@ -53,7 +60,10 @@ export async function PUT(req: NextRequest) {
 /** Сброс смены до её завершения — водитель начинает заново. */
 export async function DELETE() {
   return withUser(async (user) => {
+    // Черновик сбрасывают целиком — значит и его фото больше ни к чему.
+    const before = await collectDraftPhotoPaths(user.id);
     await query('DELETE FROM shift_drafts WHERE driver_id = $1', [user.id]);
+    void discardUnusedPhotos(before, []);
     return ok({ ok: true });
   });
 }

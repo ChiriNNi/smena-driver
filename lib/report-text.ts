@@ -14,6 +14,24 @@ export function money(v: number | string): string {
   return (Number(v) || 0).toLocaleString('ru-RU') + ' ₸';
 }
 
+/**
+ * Склонение существительного по числу: «1 смена», «3 смены», «5 смен».
+ * Нужно и в выгрузке, и на экранах — «Итого: 3 смен» читается как опечатка.
+ */
+export function plural(n: number, one: string, few: string, many: string): string {
+  const abs = Math.abs(n) % 100;
+  const last = abs % 10;
+  if (abs > 10 && abs < 20) return many;
+  if (last > 1 && last < 5) return few;
+  if (last === 1) return one;
+  return many;
+}
+
+/** «3 смены» — число вместе со склонённым словом. */
+export function shiftsCount(n: number): string {
+  return `${n} ${plural(n, 'смена', 'смены', 'смен')}`;
+}
+
 export function km(v: number): string {
   return (Number(v) || 0).toLocaleString('ru-RU') + ' км';
 }
@@ -30,9 +48,12 @@ export type ShiftSummaryInput = Pick<
   | 'done'
   | 'total'
   | 'cashStart'
-  | 'cashEnd'
+  | 'cashIncome'
+  | 'cashIncomeNote'
   | 'cashExpenses'
+  | 'cashExpensesNote'
   | 'cashFines'
+  | 'cashEnd'
   | 'odoStart'
   | 'odoEnd'
 > & { remarks?: ShiftRemark[] };
@@ -46,7 +67,14 @@ export function buildShiftSummary(s: ShiftSummaryInput): string {
     `Маршрут: ${s.placeStart || '—'} → ${s.placeEnd || '—'}`,
     `Чек-лист: ${s.done}/${s.total} выполнено`,
     `Пробег: ${km(Math.max(0, s.odoEnd - s.odoStart))}`,
-    `Касса: начало ${money(s.cashStart)}, расходы ${money(s.cashExpenses)}, штрафы ${money(s.cashFines)}, итог ${money(s.cashEnd)}`,
+    // Касса разворачивается в столбик, как в бумажном журнале: остаток должен
+    // читаться вместе со строками, из которых он получился.
+    'Касса:',
+    `  начало смены ${money(s.cashStart)}`,
+    `  приход ${money(s.cashIncome)}${s.cashIncomeNote ? ` (${s.cashIncomeNote})` : ''}`,
+    `  расход ${money(s.cashExpenses)}${s.cashExpensesNote ? ` (${s.cashExpensesNote})` : ''}`,
+    `  штрафы ${money(s.cashFines)}`,
+    `  остаток ${money(s.cashEnd)}`,
   ];
 
   const remarks = s.remarks ?? [];

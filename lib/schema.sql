@@ -109,6 +109,32 @@ CREATE INDEX IF NOT EXISTS idx_shifts_date ON shifts(date_iso DESC);
 CREATE INDEX IF NOT EXISTS idx_shifts_driver ON shifts(driver_id);
 CREATE INDEX IF NOT EXISTS idx_shifts_car ON shifts(car_id);
 
+-- Приход по кассе. До этой колонки касса не сходилась: водителю некуда было
+-- записать полученные за смену деньги, и он подгонял итог руками (в выгрузке
+-- были смены с началом 15 000, расходом 40 000 и «остатком» 50 000).
+-- Комментарии — то, что в бумажном журнале писали рядом с суммой: «от ЛВ»,
+-- «обед, магазин».
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS cash_income NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS cash_income_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS cash_expenses_note TEXT NOT NULL DEFAULT '';
+
+-- Сданные раньше смены: приход в них не записан, но он был — иначе остаток не
+-- получился бы. Восстанавливаем его из самой арифметики, чтобы история
+-- сходилась так же, как новые смены.
+--
+-- Повторный запуск ничего не меняет: после пересчёта касса сходится, и условие
+-- перестаёт выполняться.
+UPDATE shifts
+   SET cash_income = cash_end + cash_expenses + cash_fines - cash_start
+ WHERE cash_income = 0
+   AND cash_end > cash_start - cash_expenses - cash_fines;
+
+-- Правка смены администратором. Сама смена остаётся на месте (это первичный
+-- документ), но видно, что её исправляли и кто: для кассы это обязательное
+-- условие, иначе исправление ничем не отличается от подделки.
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS edited_by_label TEXT NOT NULL DEFAULT '';
+
 -- Снимок чек-листа по конкретной смене. item_text хранится копией — это и есть
 -- защита истории от правок шаблона.
 CREATE TABLE IF NOT EXISTS shift_items (
@@ -164,6 +190,11 @@ CREATE TABLE IF NOT EXISTS reminders (
 
 CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(due_date);
 
+-- Планирование графика. Приложением больше не используется: график — это
+-- фактически закрытые смены (см. components/cabinet/FleetSchedule.tsx), а
+-- отдельное «назначение» водителя на дату дублировало ту же информацию, только
+-- вручную и до смены. Таблица оставлена, чтобы не потерять уже заведённые
+-- записи; ни один запрос к ней не обращается.
 CREATE TABLE IF NOT EXISTS assignments (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   date_iso   DATE NOT NULL,

@@ -5,11 +5,14 @@ import { toExpense, type ExpenseRow } from '@/lib/model';
 
 export const dynamic = 'force-dynamic';
 
-const FIELDS = 'id, car_id, driver_id, date_iso::text AS date_iso, category, amount, comment';
+const FIELDS = 'id, car_id, driver_id, shift_id, date_iso::text AS date_iso, category, amount, comment';
 
-// Расходы по автопарку. Ведёт администратор: у водителя в кабинете расходы
-// смены указываются одной суммой в кассе, а разбивка по категориям — работа
-// администратора при разборе смены.
+// Расходы по автопарку.
+//
+// Часть приходит из смен: закрытая смена сама создаёт записи на свой расход по
+// кассе и на штрафы (см. lib/shift-expenses.ts) — они помечены ссылкой на
+// смену и по отдельности не удаляются. Остальное — топливо, мойка, ТО —
+// администратор заводит руками.
 
 export async function GET(req: NextRequest) {
   return withUser(async (user) => {

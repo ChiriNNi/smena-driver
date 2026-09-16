@@ -54,13 +54,20 @@ export async function queryOne<T extends QueryResultRow = QueryResultRow>(
 }
 
 /**
+ * То, к чему можно обратиться с запросом: пул целиком или клиент внутри
+ * транзакции. Функции, которые должны работать и так и так (например
+ * syncShiftExpenses), принимают этот тип, а не конкретный клиент.
+ */
+export type Queryable = {
+  query: <R extends QueryResultRow = QueryResultRow>(text: string, params?: unknown[]) => Promise<R[]>;
+};
+
+/**
  * Выполняет функцию внутри одной транзакции на выделенном клиенте пула.
  * Используется для операций, которые должны либо полностью примениться, либо не примениться вовсе
  * (например, завершение смены: история + пробег + расходы + график записываются атомарно).
  */
-export async function withTransaction<T>(
-  fn: (client: { query: <R extends QueryResultRow = QueryResultRow>(text: string, params?: unknown[]) => Promise<R[]> }) => Promise<T>
-): Promise<T> {
+export async function withTransaction<T>(fn: (client: Queryable) => Promise<T>): Promise<T> {
   const client = await getPool().connect();
   try {
     await client.query('BEGIN');

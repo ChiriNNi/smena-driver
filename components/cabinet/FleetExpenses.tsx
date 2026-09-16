@@ -7,8 +7,14 @@ import { useStore } from './store';
 import { Icon } from './icons';
 import { ConfirmDialog, EmptyState, Field, IconButton, Pill, SectionHeader, SelectField, Sheet, StatTile } from './ui';
 
-// Расходы по автопарку: топливо, мойка, ТО, штрафы. Заводит администратор,
-// в проде часть будет прилетать автоматически из завершённых смен.
+// Расходы по автопарку: топливо, мойка, ТО, штрафы.
+//
+// Часть приходит сама: закрытая смена создаёт записи на свой расход по кассе и
+// на штрафы. Они помечены «из смены» и по отдельности не удаляются — первичный
+// документ здесь смена, и суммы должны повторять её. Исправляются они правкой
+// самой смены, после которой записи пересобираются.
+//
+// Остальное — заправки, мойки, ТО — администратор заводит руками.
 
 export default function FleetExpenses() {
   const { expenses, cars, drivers, addExpense, removeExpense } = useStore();
@@ -41,6 +47,7 @@ export default function FleetExpenses() {
 
   const total = filtered.reduce((s, e) => s + e.amount, 0);
   const fines = filtered.filter((e) => e.category === 'Штраф').reduce((s, e) => s + e.amount, 0);
+  const fromShifts = filtered.filter((e) => e.shiftId).reduce((s, e) => s + e.amount, 0);
 
   function save() {
     if (!form.carId || !form.amount) return;
@@ -71,6 +78,12 @@ export default function FleetExpenses() {
           </option>
         ))}
       </SelectField>
+
+      {fromShifts > 0 && (
+        <p className="rounded-2xl border border-dashed border-[#e7e9e2] bg-[#f5f6f1] p-3 text-[11px] leading-relaxed text-[#5c6066]">
+          Из закрытых смен: {money(fromShifts)}. Эти записи приходят сами и правятся в самой смене.
+        </p>
+      )}
 
       {byCategory.length > 0 && (
         <div className="p-card p-4">
@@ -103,9 +116,10 @@ export default function FleetExpenses() {
           {filtered.map((e) => (
             <div key={e.id} className="p-card flex items-center gap-3 p-3.5">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm font-bold tabular-nums">{money(e.amount)}</p>
                   {e.category === 'Штраф' ? <Pill tone="bad">{e.category}</Pill> : <Pill>{e.category}</Pill>}
+                  {e.shiftId && <Pill tone="good">из смены</Pill>}
                 </div>
                 <p className="mt-0.5 truncate text-xs text-[#5c6066]">
                   {formatDate(e.date)} · {carLabel(cars, e.carId)}
@@ -115,7 +129,15 @@ export default function FleetExpenses() {
                   {e.comment ? ` · ${e.comment}` : ''}
                 </p>
               </div>
-              <IconButton icon="trash" label="Удалить" tone="danger" onClick={() => setConfirmDelete(e)} />
+              {/* Расход из смены не удаляется отдельно: он повторяет её суммы
+                  и меняется только вместе с ней. */}
+              <IconButton
+                icon="trash"
+                label={e.shiftId ? 'Правится в смене' : 'Удалить'}
+                tone="danger"
+                disabled={!!e.shiftId}
+                onClick={() => setConfirmDelete(e)}
+              />
             </div>
           ))}
         </div>

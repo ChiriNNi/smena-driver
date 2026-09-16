@@ -3,7 +3,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as api from '@/lib/api';
 import type {
-  Assignment,
   Car,
   Driver,
   Expense,
@@ -38,7 +37,6 @@ type Store = {
   shifts: Shift[];
   expenses: Expense[];
   reminders: Reminder[];
-  assignments: Assignment[];
   rules: Rule[];
   quiz: QuizQuestionAdmin[];
   acks: QuizAttempt[];
@@ -53,6 +51,8 @@ type Store = {
   removeDriver: (id: string) => Promise<void>;
 
   finishShift: (data: api.FinishShiftInput) => Promise<Shift | null>;
+  /** Исправление сданной смены администратором: смена помечается как правленая. */
+  updateShift: (id: string, patch: api.ShiftPatch) => Promise<Shift | null>;
 
   addExpense: (data: { carId: string; driverId?: string; date?: string; category: string; amount: number; comment?: string }) => Promise<void>;
   removeExpense: (id: string) => Promise<void>;
@@ -60,9 +60,6 @@ type Store = {
   addReminder: (data: { carId: string; kind: string; dueDate: string; note?: string }) => Promise<void>;
   updateReminder: (id: string, patch: Partial<{ carId: string; kind: string; dueDate: string; note: string }>) => Promise<void>;
   removeReminder: (id: string) => Promise<void>;
-
-  addAssignment: (data: { date: string; driverId: string; carId: string; timeStart: string; timeEnd: string }) => Promise<void>;
-  removeAssignment: (id: string) => Promise<void>;
 
   addRule: (data: api.RuleInput) => Promise<void>;
   updateRule: (id: string, patch: Partial<api.RuleInput>) => Promise<void>;
@@ -90,7 +87,6 @@ export function StoreProvider({ role, children }: { role: 'driver' | 'admin'; ch
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
   const [quiz, setQuiz] = useState<QuizQuestionAdmin[]>([]);
   const [acks, setAcks] = useState<QuizAttempt[]>([]);
@@ -130,16 +126,14 @@ export function StoreProvider({ role, children }: { role: 'driver' | 'admin'; ch
       setChecklist(checklistData.checklist);
 
       if (isAdmin) {
-        const [expensesData, remindersData, assignmentsData, quizData, acksData] = await Promise.all([
+        const [expensesData, remindersData, quizData, acksData] = await Promise.all([
           api.expenses.list(),
           api.reminders.list(),
-          api.assignments.list(),
           api.quiz.list<QuizQuestionAdmin>(),
           api.quiz.attempts(),
         ]);
         setExpenses(expensesData);
         setReminders(remindersData);
-        setAssignments(assignmentsData);
         setQuiz(quizData);
         setAcks(acksData);
       }
@@ -153,6 +147,8 @@ export function StoreProvider({ role, children }: { role: 'driver' | 'admin'; ch
     void load();
   }, [load]);
 
+
+
   const value = useMemo<Store>(() => {
     return {
       loading,
@@ -165,7 +161,6 @@ export function StoreProvider({ role, children }: { role: 'driver' | 'admin'; ch
       shifts,
       expenses,
       reminders,
-      assignments,
       rules,
       quiz,
       acks,
@@ -206,6 +201,19 @@ export function StoreProvider({ role, children }: { role: 'driver' | 'admin'; ch
         return res.shift;
       },
 
+      updateShift: async (id, patch) => {
+        const shift = await run(() => api.shifts.update(id, patch));
+        if (!shift) return null;
+        setShifts((prev) => prev.map((s) => (s.id === id ? shift : s)));
+        // Расход и штрафы смены лежат ещё и в расходах автопарка — там теперь
+        // другие суммы, поэтому список перечитываем.
+        if (isAdmin) {
+          const next = await run(() => api.expenses.list());
+          if (next) setExpenses(next);
+        }
+        return shift;
+      },
+
       addExpense: async (data) => {
         const expense = await run(() => api.expenses.create(data));
         if (expense) setExpenses((prev) => [expense, ...prev]);
@@ -226,15 +234,6 @@ export function StoreProvider({ role, children }: { role: 'driver' | 'admin'; ch
       removeReminder: async (id) => {
         const res = await run(() => api.reminders.remove(id));
         if (res) setReminders((prev) => prev.filter((r) => r.id !== id));
-      },
-
-      addAssignment: async (data) => {
-        const assignment = await run(() => api.assignments.create(data));
-        if (assignment) setAssignments((prev) => [...prev, assignment]);
-      },
-      removeAssignment: async (id) => {
-        const res = await run(() => api.assignments.remove(id));
-        if (res) setAssignments((prev) => prev.filter((a) => a.id !== id));
       },
 
       addRule: async (data) => {
@@ -287,7 +286,6 @@ export function StoreProvider({ role, children }: { role: 'driver' | 'admin'; ch
     shifts,
     expenses,
     reminders,
-    assignments,
     rules,
     quiz,
     acks,

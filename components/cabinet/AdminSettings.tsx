@@ -5,8 +5,9 @@ import { SegmentedTabs } from './ui';
 import AdminChecklistEditor from './AdminChecklistEditor';
 import AdminRules from './AdminRules';
 import AdminQuiz from './AdminQuiz';
+import AdminParams from './AdminParams';
 
-type SettingsTab = 'checklist' | 'rules' | 'quiz';
+type SettingsTab = 'checklist' | 'rules' | 'quiz' | 'params';
 
 export default function AdminSettings() {
   const [tab, setTab] = useState<SettingsTab>('checklist');
@@ -18,6 +19,7 @@ export default function AdminSettings() {
           { id: 'checklist', label: 'Чек-лист' },
           { id: 'rules', label: 'Правила' },
           { id: 'quiz', label: 'Тест по ТБ' },
+          { id: 'params', label: 'Параметры' },
         ]}
         active={tab}
         onChange={setTab}
@@ -26,6 +28,7 @@ export default function AdminSettings() {
       {tab === 'checklist' && <AdminChecklistEditor />}
       {tab === 'rules' && <AdminRules />}
       {tab === 'quiz' && <AdminQuiz />}
+      {tab === 'params' && <AdminParams />}
     </div>
   );
 }

@@ -7,7 +7,7 @@
 
 import type { Car, Driver } from './model';
 
-export { formatDateRu as formatDate, km, money } from './report-text';
+export { formatDateRu as formatDate, km, money, plural, shiftsCount } from './report-text';
 export { formatPhoneInput, onlyDigits, pinFromPhone } from './phone';
 
 export function carLabel(cars: Car[], carId: string): string {

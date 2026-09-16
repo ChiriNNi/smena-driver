@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import * as api from '@/lib/api';
+import { downloadFile, toCsv, todayISO } from '@/lib/labels';
 import { Icon } from './icons';
 import { CardTitle, EmptyState, Pill, SectionHeader, StatTile } from './ui';
 
@@ -34,6 +35,35 @@ export default function AdminQuizSummary() {
   const { totals, byDriver, byTopic, hardestQuestions } = summary;
   const passPercent = totals.attempts === 0 ? 0 : Math.round((totals.passed / totals.attempts) * 100);
 
+  /**
+   * Выгрузка сводки. Собирается в браузере: данные уже здесь, и отдельный
+   * запрос к серверу ради тех же строк ни к чему.
+   */
+  function exportCsv() {
+    const rows: (string | number)[][] = [
+      ['Сводка по тестам ТБ', `на ${formatWhen(todayISO())}`],
+      [],
+      ['Водитель', 'Попыток', 'Сдано', 'Не сдано', 'Подписано', 'Верных, %', 'Последний тест', 'Последний счёт'],
+      ...byDriver.map((d) => [
+        d.driverLabel,
+        d.attempts,
+        d.passed,
+        d.failed,
+        d.signed,
+        d.averagePercent,
+        formatWhen(d.lastAt),
+        d.lastScore ?? '',
+      ]),
+      [],
+      ['Раздел регламента', 'Ответов', 'Ошибок', 'Ошибок, %'],
+      ...byTopic.map((t) => [t.topic, t.asked, t.wrong, t.errorPercent]),
+      [],
+      ['Вопрос', 'Раздел', 'Задан', 'Ошибок'],
+      ...hardestQuestions.map((q) => [q.question, q.topic, q.asked, q.wrong]),
+    ];
+    downloadFile(`smena-quiz-${todayISO()}.csv`, toCsv(rows));
+  }
+
   if (totals.attempts === 0) {
     return (
       <EmptyState
@@ -55,6 +85,11 @@ export default function AdminQuizSummary() {
           tone={passPercent < 70 ? 'warn' : undefined}
         />
       </div>
+
+      <button onClick={exportCsv} className="p-btn p-btn-outline flex items-center justify-center gap-1.5 py-2.5 text-xs">
+        <Icon name="download" size={14} />
+        Выгрузить сводку в CSV
+      </button>
 
       <SectionHeader title={`По водителям · ${byDriver.length}`} />
       {byDriver.map((d) => (

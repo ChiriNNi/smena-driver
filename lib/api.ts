@@ -5,7 +5,6 @@
 // fetch и «магические» адреса по экранам.
 
 import type {
-  Assignment,
   BriefingStatus,
   Car,
   Driver,
@@ -136,8 +135,10 @@ export type FinishShiftInput = {
   placeStart: string;
   placeEnd: string;
   cashStart: number;
-  cashEnd: number;
+  cashIncome: number;
+  cashIncomeNote: string;
   cashExpenses: number;
+  cashExpensesNote: string;
   cashFines: number;
   odoStart: number;
   odoEnd: number;
@@ -151,11 +152,42 @@ export type FinishShiftInput = {
   }[];
 };
 
+/** Что переносится в новую смену с предыдущей: остаток кассы и одометр. */
+export type ShiftOpening = {
+  cash: number | null;
+  cashDate: string | null;
+  odo: number | null;
+  odoDate: string | null;
+};
+
+/** Поля, которые администратор может исправить в сданной смене. */
+export type ShiftPatch = Partial<{
+  date: string;
+  timeStart: string;
+  timeEnd: string;
+  placeStart: string;
+  placeEnd: string;
+  cashStart: number;
+  cashIncome: number;
+  cashIncomeNote: string;
+  cashExpenses: number;
+  cashExpensesNote: string;
+  cashFines: number;
+  odoStart: number;
+  odoEnd: number;
+}>;
+
 export const shifts = {
   list: (filters: ShiftFilters = {}) => get<{ shifts: Shift[] }>(`/api/shifts${qs(filters)}`).then((r) => r.shifts),
   detail: (id: string) => get<{ shift: Shift; items: ShiftItem[]; summary: string }>(`/api/shifts/${id}`),
   finish: (data: FinishShiftInput) =>
     send<{ shift: Shift; summary?: string; duplicate?: boolean }>('/api/shifts', 'POST', data),
+  /** Исправление сданной смены администратором — смена помечается как правленая. */
+  update: (id: string, patch: ShiftPatch) =>
+    send<{ shift: Shift; summary: string }>(`/api/shifts/${id}`, 'PATCH', patch).then((r) => r.shift),
+  /** Начальные показания новой смены: остаток кассы водителя и одометр машины. */
+  opening: (carId?: string) =>
+    get<{ opening: ShiftOpening }>(`/api/shifts/opening${qs({ carId })}`).then((r) => r.opening),
   /** Адрес выгрузки — открывается ссылкой, файл отдаёт сервер. */
   exportUrl: (format: 'csv' | 'xlsx', filters: ShiftFilters = {}) =>
     `/api/export/shifts${qs({ ...filters, format })}`,
@@ -184,14 +216,6 @@ export const reminders = {
   update: (id: string, patch: Partial<{ carId: string; kind: string; dueDate: string; note: string }>) =>
     send<{ reminder: Reminder }>(`/api/reminders/${id}`, 'PATCH', patch).then((r) => r.reminder),
   remove: (id: string) => send<{ ok: true }>(`/api/reminders/${id}`, 'DELETE'),
-};
-
-export const assignments = {
-  list: (filters: { from?: string; to?: string } = {}) =>
-    get<{ assignments: Assignment[] }>(`/api/assignments${qs(filters)}`).then((r) => r.assignments),
-  create: (data: { date: string; driverId: string; carId: string; timeStart: string; timeEnd: string }) =>
-    send<{ assignment: Assignment }>('/api/assignments', 'POST', data).then((r) => r.assignment),
-  remove: (id: string) => send<{ ok: true }>(`/api/assignments/${id}`, 'DELETE'),
 };
 
 /* ─── Правила и инструктаж ───────────────────────────────────────────────── */

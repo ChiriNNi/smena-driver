@@ -13,15 +13,25 @@ import {
   withUser,
 } from '@/lib/api-helpers';
 import { getBriefingStatus } from '@/lib/briefing';
-import { buildShiftSummary } from '@/lib/report-text';
-import { carLabel, driverLabel, toShift, type ShiftRemark, type ShiftRow } from '@/lib/model';
+import { collectDraftPhotoPaths, discardUnusedPhotos } from '@/lib/draft-photos';
+import { syncShiftExpenses } from '@/lib/shift-expenses';
+import { buildShiftSummary, money } from '@/lib/report-text';
+import { carLabel, cashBalance, driverLabel, toShift, type ShiftRemark, type ShiftRow } from '@/lib/model';
 
 export const dynamic = 'force-dynamic';
 
 const SHIFT_FIELDS = `id, driver_id, car_id, driver_label, car_label, date_iso::text AS date_iso,
   time_start, time_end, place_start, place_end,
-  cash_start, cash_end, cash_expenses, cash_fines, odo_start, odo_end,
-  checklist_done, checklist_total`;
+  cash_start, cash_end, cash_income, cash_income_note, cash_expenses, cash_expenses_note,
+  cash_fines, odo_start, odo_end, checklist_done, checklist_total,
+  edited_at::text AS edited_at, edited_by_label`;
+
+/**
+ * Пробег за смену, при котором показания одометра почти наверняка набраны с
+ * опечаткой. В выгрузке была смена с «пробегом» 9000 км за сутки — принимать
+ * такое молча нельзя: по этим цифрам считают расход топлива и ТО.
+ */
+const MAX_SHIFT_KM = 2000;
 
 /* ─── История смен ───────────────────────────────────────────────────────── */
 
@@ -155,6 +165,9 @@ export async function POST(req: NextRequest) {
     const items = parseItems(body.items, user.id);
     const done = items.filter((i) => i.checked).length;
 
+    // Что было загружено в черновик: после записи смены лишние файлы удалим.
+    const draftPhotoPaths = await collectDraftPhotoPaths(user.id);
+
     const shiftData = {
       driverLabel: driverLabel(user),
       carLabel: carLabel(car),
@@ -164,8 +177,10 @@ export async function POST(req: NextRequest) {
       placeStart: str(body, 'placeStart', { max: 200 }),
       placeEnd: str(body, 'placeEnd', { max: 200 }),
       cashStart: num(body, 'cashStart', { min: 0 }),
-      cashEnd: num(body, 'cashEnd', { min: 0 }),
+      cashIncome: num(body, 'cashIncome', { min: 0 }),
+      cashIncomeNote: str(body, 'cashIncomeNote', { max: 200 }),
       cashExpenses: num(body, 'cashExpenses', { min: 0 }),
+      cashExpensesNote: str(body, 'cashExpensesNote', { max: 200 }),
       cashFines: num(body, 'cashFines', { min: 0 }),
       odoStart: num(body, 'odoStart', { min: 0 }),
       odoEnd: num(body, 'odoEnd', { min: 0 }),
@@ -173,15 +188,29 @@ export async function POST(req: NextRequest) {
       total: items.length,
     };
 
+    // Остаток не принимаем от клиента, а считаем: касса обязана сходиться.
+    // Раньше это были четыре независимых числа, и в истории остались смены,
+    // где остаток не выводился из начала и расхода вовсе.
+    const cashEnd = cashBalance(shiftData);
+    if (cashEnd < 0) {
+      throw new ApiError(
+        `Расход больше, чем было в кассе: ${money(shiftData.cashStart)} и приход ${money(shiftData.cashIncome)} ` +
+          `не покрывают расход ${money(shiftData.cashExpenses)} и штрафы ${money(shiftData.cashFines)}.`
+      );
+    }
+
     if (shiftData.odoEnd && shiftData.odoEnd < shiftData.odoStart) {
       throw new ApiError('Одометр на конец смены меньше, чем на начало — проверьте показания.');
+    }
+    if (shiftData.odoEnd - shiftData.odoStart > MAX_SHIFT_KM) {
+      throw new ApiError(`Пробег за смену больше ${MAX_SHIFT_KM} км — проверьте показания одометра.`);
     }
 
     const remarks: ShiftRemark[] = items
       .filter((i) => i.comment || i.photoPaths.length > 0)
       .map((i) => ({ text: i.text, comment: i.comment, photos: i.photoPaths.length }));
 
-    const summary = buildShiftSummary({ ...shiftData, remarks });
+    const summary = buildShiftSummary({ ...shiftData, cashEnd, remarks });
 
     // Смена, её снимок чек-листа и очистка черновика — одной транзакцией:
     // иначе при обрыве связи можно получить смену без пунктов или живой
@@ -191,9 +220,10 @@ export async function POST(req: NextRequest) {
         `INSERT INTO shifts (
            driver_id, car_id, driver_label, car_label, date_iso,
            time_start, time_end, place_start, place_end,
-           cash_start, cash_end, cash_expenses, cash_fines, odo_start, odo_end,
+           cash_start, cash_end, cash_income, cash_income_note,
+           cash_expenses, cash_expenses_note, cash_fines, odo_start, odo_end,
            checklist_done, checklist_total, summary_text, client_request_id
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
          RETURNING ${SHIFT_FIELDS}`,
         [
           user.id,
@@ -206,8 +236,11 @@ export async function POST(req: NextRequest) {
           shiftData.placeStart,
           shiftData.placeEnd,
           shiftData.cashStart,
-          shiftData.cashEnd,
+          cashEnd,
+          shiftData.cashIncome,
+          shiftData.cashIncomeNote,
           shiftData.cashExpenses,
+          shiftData.cashExpensesNote,
           shiftData.cashFines,
           shiftData.odoStart,
           shiftData.odoEnd,
@@ -232,9 +265,29 @@ export async function POST(req: NextRequest) {
         values
       );
 
+      // Расход и штрафы уходят в расходы автопарка сразу: раньше эти цифры
+      // оставались только внутри смены, и администратор вбивал их заново.
+      await syncShiftExpenses(tx, {
+        id: row.id,
+        carId: carId,
+        driverId: user.id,
+        date: shiftData.date,
+        cashExpenses: shiftData.cashExpenses,
+        cashExpensesNote: shiftData.cashExpensesNote,
+        cashFines: shiftData.cashFines,
+      });
+
       await tx.query('DELETE FROM shift_drafts WHERE driver_id = $1', [user.id]);
       return row;
     });
+
+    // Фото, загруженные в черновик и потом снятые с замечания, в смену не
+    // попали — в бакете они больше не нужны. Уборка после ответа не нужна:
+    // смена уже записана, и ошибка удаления её не должна отменять.
+    void discardUnusedPhotos(
+      draftPhotoPaths,
+      items.flatMap((i) => i.photoPaths)
+    );
 
     return ok({ shift: toShift(shift, remarks), summary });
   });

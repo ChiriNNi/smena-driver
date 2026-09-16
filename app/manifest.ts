@@ -15,9 +15,12 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#f8f9f4',
     lang: 'ru',
     icons: [
-      // Файл один, размером 1337×1289 — браузер сам уменьшит его под нужную
-      // иконку, поэтому размеры указаны как any.
-      { src: '/ic-group-logo.png', sizes: 'any', type: 'image/png' },
+      // Иконка собирается из логотипа на сборке (app/icon.tsx): логотип
+      // прямоугольный, а Android обрезает иконку до круга, поэтому нужен
+      // квадрат с полями. Сам логотип как есть сюда не годится — по краям он
+      // срезался.
+      { src: '/icon', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/icon', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
   };
 }

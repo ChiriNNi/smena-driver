@@ -109,13 +109,31 @@ export type Shift = {
   done: number;
   total: number;
   cashStart: number;
-  cashEnd: number;
+  /** Приход за смену: то, что водитель получил, — без него касса не сходится. */
+  cashIncome: number;
+  cashIncomeNote: string;
   cashExpenses: number;
+  cashExpensesNote: string;
   cashFines: number;
+  /** Остаток: не вводится, а считается — начало + приход − расход − штрафы. */
+  cashEnd: number;
   odoStart: number;
   odoEnd: number;
   remarks: ShiftRemark[];
+  /** Когда и кем смена исправлена после сдачи; пусто — сдана как есть. */
+  editedAt: string | null;
+  editedByLabel: string;
 };
+
+/** Остаток кассы = начало + приход − расход − штрафы. Одна формула на всё приложение. */
+export function cashBalance(s: {
+  cashStart: number;
+  cashIncome: number;
+  cashExpenses: number;
+  cashFines: number;
+}): number {
+  return s.cashStart + s.cashIncome - s.cashExpenses - s.cashFines;
+}
 
 export type ShiftRow = {
   id: string;
@@ -130,12 +148,17 @@ export type ShiftRow = {
   place_end: string;
   cash_start: string;
   cash_end: string;
+  cash_income: string;
+  cash_income_note: string;
   cash_expenses: string;
+  cash_expenses_note: string;
   cash_fines: string;
   odo_start: string;
   odo_end: string;
   checklist_done: number;
   checklist_total: number;
+  edited_at?: string | null;
+  edited_by_label?: string | null;
 };
 
 // pg отдаёт NUMERIC строкой (иначе теряется точность на больших числах) —
@@ -159,12 +182,17 @@ export function toShift(r: ShiftRow, remarks: ShiftRemark[] = []): Shift {
     done: r.checklist_done,
     total: r.checklist_total,
     cashStart: num(r.cash_start),
-    cashEnd: num(r.cash_end),
+    cashIncome: num(r.cash_income),
+    cashIncomeNote: r.cash_income_note ?? '',
     cashExpenses: num(r.cash_expenses),
+    cashExpensesNote: r.cash_expenses_note ?? '',
     cashFines: num(r.cash_fines),
+    cashEnd: num(r.cash_end),
     odoStart: num(r.odo_start),
     odoEnd: num(r.odo_end),
     remarks,
+    editedAt: r.edited_at ?? null,
+    editedByLabel: r.edited_by_label ?? '',
   };
 }
 
@@ -189,6 +217,8 @@ export type Expense = {
   id: string;
   carId: string;
   driverId: string;
+  /** Непусто — расход пришёл из закрытой смены и правится только вместе с ней. */
+  shiftId: string;
   date: string;
   category: string;
   amount: number;
@@ -199,6 +229,7 @@ export type ExpenseRow = {
   id: string;
   car_id: string | null;
   driver_id: string | null;
+  shift_id?: string | null;
   date_iso: string;
   category: string;
   amount: string;
@@ -210,6 +241,7 @@ export function toExpense(r: ExpenseRow): Expense {
     id: r.id,
     carId: r.car_id ?? '',
     driverId: r.driver_id ?? '',
+    shiftId: r.shift_id ?? '',
     date: r.date_iso,
     category: r.category,
     amount: num(r.amount),
@@ -224,35 +256,6 @@ export type ReminderRow = { id: string; car_id: string; kind: string; due_date: 
 
 export function toReminder(r: ReminderRow): Reminder {
   return { id: r.id, carId: r.car_id, kind: r.kind, dueDate: r.due_date, note: r.note };
-}
-
-export type Assignment = {
-  id: string;
-  date: string;
-  driverId: string;
-  carId: string;
-  timeStart: string;
-  timeEnd: string;
-};
-
-export type AssignmentRow = {
-  id: string;
-  date_iso: string;
-  driver_id: string;
-  car_id: string;
-  time_start: string;
-  time_end: string;
-};
-
-export function toAssignment(r: AssignmentRow): Assignment {
-  return {
-    id: r.id,
-    date: r.date_iso,
-    driverId: r.driver_id,
-    carId: r.car_id,
-    timeStart: r.time_start,
-    timeEnd: r.time_end,
-  };
 }
 
 /* ─── Правила и тест по ТБ ───────────────────────────────────────────────── */

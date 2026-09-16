@@ -36,8 +36,6 @@ function toResponse(err: unknown): NextResponse {
   if (e?.code === '23505') {
     if (e.constraint === 'drivers_phone_digits_key') return jsonError('Этот номер телефона уже зарегистрирован.', 409);
     if (e.constraint === 'cars_plate_key') return jsonError('Автомобиль с таким госномером уже есть.', 409);
-    if (e.constraint === 'assignments_date_iso_driver_id_key')
-      return jsonError('На эту дату водитель уже есть в графике.', 409);
     return jsonError('Такая запись уже существует.', 409);
   }
   if (e?.code === '23503') return jsonError('Ссылка на несуществующую запись.', 400);

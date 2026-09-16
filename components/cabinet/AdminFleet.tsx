@@ -7,10 +7,10 @@ import FleetExpenses from './FleetExpenses';
 import FleetReminders from './FleetReminders';
 import FleetSchedule from './FleetSchedule';
 
-type FleetTab = 'cars' | 'expenses' | 'reminders' | 'schedule';
+export type FleetTab = 'cars' | 'expenses' | 'reminders' | 'schedule';
 
-export default function AdminFleet() {
-  const [tab, setTab] = useState<FleetTab>('cars');
+export default function AdminFleet({ initialTab = 'cars' }: { initialTab?: FleetTab }) {
+  const [tab, setTab] = useState<FleetTab>(initialTab);
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4">

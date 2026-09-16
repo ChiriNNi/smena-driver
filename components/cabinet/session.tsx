@@ -30,6 +30,13 @@ type Session = {
    * экран инструктажа оставался на месте, хотя подпись уже принята.
    */
   setBriefingStatus: (status: BriefingStatus) => void;
+  /**
+   * Сохранить настройки приложения. Держится здесь, а не в хранилище данных:
+   * настройки читают все экраны через сессию, и после правки они должны
+   * обновиться сразу — иначе водитель до перезахода видел бы прежнее число
+   * вопросов в тесте.
+   */
+  saveSettings: (patch: Partial<AppSettings>) => Promise<void>;
 };
 
 const DEFAULT_SETTINGS: AppSettings = { quizPerAttempt: 5, quizPassScore: 5, briefingFreshHours: 24, whatsappTarget: '' };
@@ -88,6 +95,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       }
     },
     setBriefingStatus: setBriefing,
+    saveSettings: async (patch) => {
+      // Ошибку не глушим: экран настроек показывает её сам.
+      setSettings(await api.settings.update(patch));
+    },
   };
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

@@ -20,10 +20,13 @@ export default function ShiftReportModal({
   shift,
   title = 'Отчёт по смене',
   onClose,
+  onRequestEdit,
 }: {
   shift: Shift;
   title?: string;
   onClose: () => void;
+  /** Задано только у администратора — в кассе появляется кнопка «Исправить». */
+  onRequestEdit?: () => void;
 }) {
   const { settings } = useSession();
   const [items, setItems] = useState<ShiftItem[] | null>(null);
@@ -71,6 +74,14 @@ export default function ShiftReportModal({
         </>
       }
     >
+      {shift.editedAt && (
+        <p className="mb-3 flex items-start gap-2 rounded-2xl bg-[#b5811c]/12 px-3 py-2.5 text-[11px] leading-relaxed font-semibold text-[#96690f]">
+          <Icon name="pencil" size={13} className="mt-px shrink-0" />
+          Смена исправлена {formatDate(shift.editedAt.slice(0, 10))}
+          {shift.editedByLabel && ` · ${shift.editedByLabel}`}
+        </p>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <StatTile
           icon="check-circle"
@@ -101,24 +112,28 @@ export default function ShiftReportModal({
         </div>
       </div>
 
+      {/* Касса в том же порядке, в каком её ведут на бумаге: остаток должен
+          читаться вместе со строками, из которых он получился. */}
       <div className="p-card mt-3 p-4">
-        <CardTitle icon="wallet" title="Касса" />
-        <div className="p-card-line flex items-center justify-between py-2 text-sm">
-          <span className="text-[#5c6066]">Начало смены</span>
-          <span className="font-medium tabular-nums">{money(shift.cashStart)}</span>
-        </div>
-        <div className="p-card-line flex items-center justify-between py-2 text-sm">
-          <span className="text-[#5c6066]">Расходы</span>
-          <span className="font-medium tabular-nums">{money(shift.cashExpenses)}</span>
-        </div>
-        <div className="p-card-line flex items-center justify-between py-2 text-sm">
-          <span className="text-[#5c6066]">Штрафы</span>
-          <span className={'font-medium tabular-nums ' + (shift.cashFines > 0 ? 'text-[#c0564a]' : '')}>
-            {money(shift.cashFines)}
-          </span>
-        </div>
-        <div className="flex items-center justify-between py-2 text-sm font-bold">
-          <span>Итог смены</span>
+        <CardTitle
+          icon="wallet"
+          title="Касса"
+          action={
+            onRequestEdit && (
+              <button onClick={onRequestEdit} className="p-btn p-btn-outline flex items-center gap-1.5 px-3 py-1.5 text-[11px]">
+                <Icon name="pencil" size={12} />
+                Исправить
+              </button>
+            )
+          }
+        />
+        <CashLine label="Начало смены" value={shift.cashStart} />
+        <CashLine label="Приход" value={shift.cashIncome} note={shift.cashIncomeNote} />
+        <CashLine label="Итого доход" value={shift.cashStart + shift.cashIncome} strong />
+        <CashLine label="Расход" value={shift.cashExpenses} note={shift.cashExpensesNote} />
+        <CashLine label="Штрафы" value={shift.cashFines} tone={shift.cashFines > 0 ? 'bad' : undefined} />
+        <div className="flex items-center justify-between gap-3 py-2 text-sm font-bold">
+          <span>Остаток на конец</span>
           <span className="tabular-nums text-[#5e9128]">{money(shift.cashEnd)}</span>
         </div>
       </div>
@@ -182,5 +197,38 @@ export default function ShiftReportModal({
         </>
       )}
     </Sheet>
+  );
+}
+
+/** Строка журнала кассы: сумма и, если была, приписка «от кого» / «на что». */
+function CashLine({
+  label,
+  value,
+  note,
+  strong,
+  tone,
+}: {
+  label: string;
+  value: number;
+  note?: string;
+  strong?: boolean;
+  tone?: 'bad';
+}) {
+  return (
+    <div className="p-card-line flex items-start justify-between gap-3 py-2 text-sm">
+      <div className="min-w-0">
+        <span className={strong ? 'font-semibold' : 'text-[#5c6066]'}>{label}</span>
+        {note && <p className="truncate text-[11px] text-[#9a9d96]">{note}</p>}
+      </div>
+      <span
+        className={
+          'shrink-0 tabular-nums ' +
+          (strong ? 'font-semibold' : 'font-medium ') +
+          (tone === 'bad' ? ' text-[#c0564a]' : '')
+        }
+      >
+        {money(value)}
+      </span>
+    </div>
   );
 }
